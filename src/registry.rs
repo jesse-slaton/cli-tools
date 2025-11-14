@@ -71,7 +71,7 @@ pub fn read_path(scope: PathScope) -> Result<String> {
         );
 
         if result != ERROR_SUCCESS {
-            RegCloseKey(hkey).ok();
+            let _ = RegCloseKey(hkey).ok();
             return Err(anyhow::anyhow!(
                 "Failed to query {} PATH size",
                 scope.as_str()
@@ -92,7 +92,7 @@ pub fn read_path(scope: PathScope) -> Result<String> {
             Some(&mut buffer_size),
         );
 
-        RegCloseKey(hkey).ok();
+        let _ = RegCloseKey(hkey).ok();
 
         if result != ERROR_SUCCESS {
             return Err(anyhow::anyhow!("Failed to read {} PATH", scope.as_str()));
@@ -154,7 +154,7 @@ pub fn write_path(scope: PathScope, value: &str) -> Result<()> {
             Some(value_bytes),
         );
 
-        RegCloseKey(hkey).ok();
+        let _ = RegCloseKey(hkey).ok();
 
         if result != ERROR_SUCCESS {
             return Err(anyhow::anyhow!("Failed to write {} PATH", scope.as_str()));
