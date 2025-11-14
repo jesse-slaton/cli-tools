@@ -1,4 +1,3 @@
-use windows::Win32::Foundation::BOOL;
 use windows::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
 use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
@@ -12,7 +11,7 @@ pub fn is_admin() -> bool {
             return false;
         }
 
-        let mut elevation = TOKEN_ELEVATION { TokenIsElevated: BOOL(0) };
+        let mut elevation = TOKEN_ELEVATION { TokenIsElevated: 0 };
         let mut return_length = 0u32;
 
         // Query the token elevation information
@@ -28,7 +27,7 @@ pub fn is_admin() -> bool {
             return false;
         }
 
-        elevation.TokenIsElevated.as_bool()
+        elevation.TokenIsElevated != 0
     }
 }
 

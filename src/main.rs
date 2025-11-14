@@ -38,6 +38,10 @@ fn main() -> Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+
+    // Small delay to ensure terminal is fully ready on Windows
+    std::thread::sleep(std::time::Duration::from_millis(50));
+
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -69,6 +73,18 @@ fn run_app<B: ratatui::backend::Backend>(
     app: &mut App,
     ui: &mut UI,
 ) -> Result<()> {
+    // Initial render to show the UI immediately
+    terminal.draw(|f| ui.render(f, app))?;
+
+    // Flush any pending keyboard events from application launch
+    // Use a polling window to catch Enter key delayed by Windows/MSYS2 console buffering
+    let flush_deadline = std::time::Instant::now() + std::time::Duration::from_millis(150);
+    while std::time::Instant::now() < flush_deadline {
+        if event::poll(std::time::Duration::from_millis(10))? {
+            event::read()?;
+        }
+    }
+
     loop {
         terminal.draw(|f| ui.render(f, app))?;
 

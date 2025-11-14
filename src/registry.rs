@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
 use windows::core::PCWSTR;
@@ -139,14 +139,19 @@ pub fn write_path(scope: PathScope, value: &str) -> Result<()> {
         let value_wide = to_wide_string(value);
         let value_name_wide = to_wide_string(PATH_VALUE);
 
+        // Convert wide string to byte slice for the new API
+        let value_bytes = std::slice::from_raw_parts(
+            value_wide.as_ptr() as *const u8,
+            value_wide.len() * 2,
+        );
+
         // Write the value
         let result = RegSetValueExW(
             hkey,
             PCWSTR(value_name_wide.as_ptr()),
             0,
             REG_EXPAND_SZ,
-            Some(&value_wide as *const _ as *const u8),
-            (value_wide.len() * 2) as u32,
+            Some(value_bytes),
         );
 
         RegCloseKey(hkey).ok();
@@ -187,7 +192,7 @@ fn to_wide_string(s: &str) -> Vec<u16> {
 
 /// Broadcast environment change notification
 fn broadcast_environment_change() -> Result<()> {
-    use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+    use windows::Win32::Foundation::{LPARAM, WPARAM};
     use windows::Win32::UI::WindowsAndMessaging::{
         SendMessageTimeoutW, HWND_BROADCAST, SMTO_ABORTIFHUNG, WM_SETTINGCHANGE,
     };

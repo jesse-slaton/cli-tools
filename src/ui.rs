@@ -1,5 +1,4 @@
 use ratatui::{
-    backend::Backend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
@@ -17,7 +16,7 @@ impl UI {
         Self
     }
 
-    pub fn render<B: Backend>(&self, f: &mut Frame<B>, app: &App) {
+    pub fn render(&self, f: &mut Frame, app: &App) {
         match app.mode {
             Mode::Help => self.render_help(f),
             Mode::Confirm(action) => self.render_confirm(f, app, action),
@@ -26,7 +25,7 @@ impl UI {
         }
     }
 
-    fn render_main<B: Backend>(&self, f: &mut Frame<B>, app: &App) {
+    fn render_main(&self, f: &mut Frame, app: &App) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -35,7 +34,7 @@ impl UI {
                 Constraint::Length(3), // Status bar
                 Constraint::Length(2), // Key hints
             ])
-            .split(f.size());
+            .split(f.area());
 
         // Render header
         self.render_header(f, chunks[0], app);
@@ -62,7 +61,7 @@ impl UI {
         }
     }
 
-    fn render_header<B: Backend>(&self, f: &mut Frame<B>, area: Rect, app: &App) {
+    fn render_header(&self, f: &mut Frame, area: Rect, app: &App) {
         let stats = app.get_statistics();
 
         let title = vec![
@@ -117,7 +116,7 @@ impl UI {
         f.render_widget(header, area);
     }
 
-    fn render_panel<B: Backend>(&self, f: &mut Frame<B>, area: Rect, app: &App, panel: Panel) {
+    fn render_panel(&self, f: &mut Frame, area: Rect, app: &App, panel: Panel) {
         let is_active = app.active_panel == panel;
         let (paths, info, selected, marked) = match panel {
             Panel::Machine => (
@@ -186,7 +185,7 @@ impl UI {
         f.render_widget(list, area);
     }
 
-    fn render_status<B: Backend>(&self, f: &mut Frame<B>, area: Rect, app: &App) {
+    fn render_status(&self, f: &mut Frame, area: Rect, app: &App) {
         let status_text = vec![
             Line::from(vec![
                 Span::styled(
@@ -205,7 +204,7 @@ impl UI {
         f.render_widget(status, area);
     }
 
-    fn render_key_hints<B: Backend>(&self, f: &mut Frame<B>, area: Rect, app: &App) {
+    fn render_key_hints(&self, f: &mut Frame, area: Rect, app: &App) {
         let hints = match app.mode {
             Mode::Normal => vec![
                 Span::styled("F1", Style::default().fg(Color::Cyan)),
@@ -239,7 +238,7 @@ impl UI {
         f.render_widget(paragraph, area);
     }
 
-    fn render_help<B: Backend>(&self, f: &mut Frame<B>) {
+    fn render_help(&self, f: &mut Frame) {
         let help_text = vec![
             Line::from(vec![Span::styled(
                 "Path Commander - Help",
@@ -308,12 +307,12 @@ impl UI {
             .alignment(Alignment::Left)
             .wrap(Wrap { trim: false });
 
-        let area = centered_rect(80, 90, f.size());
+        let area = centered_rect(80, 90, f.area());
         f.render_widget(ratatui::widgets::Clear, area);
         f.render_widget(help, area);
     }
 
-    fn render_confirm<B: Backend>(&self, f: &mut Frame<B>, app: &App, action: ConfirmAction) {
+    fn render_confirm(&self, f: &mut Frame, app: &App, action: ConfirmAction) {
         let message = match action {
             ConfirmAction::Exit => {
                 if app.has_changes {
@@ -355,12 +354,12 @@ impl UI {
             )
             .alignment(Alignment::Center);
 
-        let area = centered_rect(60, 30, f.size());
+        let area = centered_rect(60, 30, f.area());
         f.render_widget(ratatui::widgets::Clear, area);
         f.render_widget(dialog, area);
     }
 
-    fn render_input_overlay<B: Backend>(&self, f: &mut Frame<B>, app: &App, input_mode: InputMode) {
+    fn render_input_overlay(&self, f: &mut Frame, app: &App, input_mode: InputMode) {
         let title = match input_mode {
             InputMode::AddPath => " Add Path ",
             InputMode::EditPath => " Edit Path ",
@@ -385,12 +384,12 @@ impl UI {
             )
             .alignment(Alignment::Left);
 
-        let area = centered_rect(70, 20, f.size());
+        let area = centered_rect(70, 20, f.area());
         f.render_widget(ratatui::widgets::Clear, area);
         f.render_widget(input, area);
     }
 
-    fn render_backup_list<B: Backend>(&self, f: &mut Frame<B>, app: &App) {
+    fn render_backup_list(&self, f: &mut Frame, app: &App) {
         let items: Vec<ListItem> = app
             .backup_list
             .iter()
@@ -424,7 +423,7 @@ impl UI {
                     .add_modifier(Modifier::BOLD),
             );
 
-        let area = centered_rect(70, 50, f.size());
+        let area = centered_rect(70, 50, f.area());
         f.render_widget(ratatui::widgets::Clear, area);
         f.render_widget(list, area);
     }

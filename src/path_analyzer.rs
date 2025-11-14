@@ -45,7 +45,7 @@ pub struct PathInfo {
 
 /// Analyze a list of path entries
 pub fn analyze_paths(paths: &[String], other_scope_paths: &[String]) -> Vec<PathInfo> {
-    let mut results = Vec::new();
+    let mut results: Vec<PathInfo> = Vec::new();
     let mut seen_normalized: HashMap<String, usize> = HashMap::new();
 
     // First pass: normalize and check existence

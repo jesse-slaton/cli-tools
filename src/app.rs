@@ -3,7 +3,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::collections::HashSet;
 
 use crate::backup::{self, PathBackup};
-use crate::path_analyzer::{analyze_paths, normalize_path, PathInfo, PathStatus};
+use crate::path_analyzer::{analyze_paths, normalize_path, PathInfo};
 use crate::permissions;
 use crate::registry::{self, PathScope};
 
@@ -160,7 +160,16 @@ impl App {
             }
 
             // Edit
-            (KeyCode::Enter, _) => self.start_edit_path(),
+            (KeyCode::Enter, _) => {
+                // Only allow editing if the current panel has paths
+                let has_paths = match self.active_panel {
+                    Panel::Machine => !self.machine_paths.is_empty(),
+                    Panel::User => !self.user_paths.is_empty(),
+                };
+                if has_paths {
+                    self.start_edit_path();
+                }
+            }
             (KeyCode::Delete, _) => {
                 if self.has_marked_items() {
                     self.mode = Mode::Confirm(ConfirmAction::DeleteSelected);
