@@ -2,7 +2,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, List, ListItem, Paragraph, Scrollbar, ScrollbarOrientation, Wrap},
     Frame,
 };
 
@@ -118,20 +118,31 @@ impl UI {
 
     fn render_panel(&self, f: &mut Frame, area: Rect, app: &App, panel: Panel) {
         let is_active = app.active_panel == panel;
-        let (paths, info, selected, marked) = match panel {
+        let (paths, info, selected, marked, scrollbar_state) = match panel {
             Panel::Machine => (
                 &app.machine_paths,
                 &app.machine_info,
                 app.machine_selected,
                 &app.machine_marked,
+                &app.machine_scrollbar_state,
             ),
             Panel::User => (
                 &app.user_paths,
                 &app.user_info,
                 app.user_selected,
                 &app.user_marked,
+                &app.user_scrollbar_state,
             ),
         };
+
+        // Split area: List (left) and Scrollbar (right 1 column)
+        let chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Min(0),      // List takes remaining space
+                Constraint::Length(1),   // Scrollbar takes 1 column
+            ])
+            .split(area);
 
         let title = format!(
             " {} {} ",
@@ -182,7 +193,24 @@ impl UI {
                 .add_modifier(Modifier::BOLD),
         );
 
-        f.render_widget(list, area);
+        f.render_widget(list, chunks[0]);
+
+        // Render scrollbar
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(Some("↑"))
+            .end_symbol(Some("↓"))
+            .track_symbol(Some("│"))
+            .thumb_symbol("█")
+            .thumb_style(if is_active {
+                Style::default().fg(Color::Cyan)
+            } else {
+                Style::default().fg(Color::Gray)
+            })
+            .track_style(Style::default().fg(Color::DarkGray));
+
+        // Clone state for rendering (render_stateful_widget needs &mut)
+        let mut scrollbar_state_mut = scrollbar_state.clone();
+        f.render_stateful_widget(scrollbar, chunks[1], &mut scrollbar_state_mut);
     }
 
     fn render_status(&self, f: &mut Frame, area: Rect, app: &App) {

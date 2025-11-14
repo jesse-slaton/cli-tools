@@ -1,5 +1,6 @@
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::widgets::ScrollbarState;
 use std::collections::HashSet;
 
 use crate::backup::{self, PathBackup};
@@ -73,6 +74,8 @@ pub struct App {
     pub input_buffer: String,
     pub backup_list: Vec<std::path::PathBuf>,
     pub backup_selected: usize,
+    pub machine_scrollbar_state: ScrollbarState,
+    pub user_scrollbar_state: ScrollbarState,
 }
 
 impl App {
@@ -91,6 +94,8 @@ impl App {
         let machine_info = analyze_paths(&machine_paths, &user_paths);
 
         Ok(Self {
+            machine_scrollbar_state: ScrollbarState::new(machine_paths.len()).position(0),
+            user_scrollbar_state: ScrollbarState::new(user_paths.len()).position(0),
             machine_paths: machine_paths.clone(),
             user_paths: user_paths.clone(),
             machine_info,
@@ -283,12 +288,14 @@ impl App {
                     .max(0)
                     .min(self.machine_paths.len().saturating_sub(1) as i32);
                 self.machine_selected = new_pos as usize;
+                self.machine_scrollbar_state = self.machine_scrollbar_state.position(self.machine_selected);
             }
             Panel::User => {
                 let new_pos = (self.user_selected as i32 + delta)
                     .max(0)
                     .min(self.user_paths.len().saturating_sub(1) as i32);
                 self.user_selected = new_pos as usize;
+                self.user_scrollbar_state = self.user_scrollbar_state.position(self.user_selected);
             }
         }
     }
@@ -297,9 +304,11 @@ impl App {
         match self.active_panel {
             Panel::Machine => {
                 self.machine_selected = pos.min(self.machine_paths.len().saturating_sub(1));
+                self.machine_scrollbar_state = self.machine_scrollbar_state.position(self.machine_selected);
             }
             Panel::User => {
                 self.user_selected = pos.min(self.user_paths.len().saturating_sub(1));
+                self.user_scrollbar_state = self.user_scrollbar_state.position(self.user_selected);
             }
         }
     }
@@ -676,12 +685,20 @@ impl App {
         self.user_info = analyze_paths(&self.user_paths, &self.machine_paths);
         self.machine_info = analyze_paths(&self.machine_paths, &self.user_paths);
 
+        // Update scrollbar content lengths
+        self.machine_scrollbar_state = self.machine_scrollbar_state
+            .content_length(self.machine_paths.len());
+        self.user_scrollbar_state = self.user_scrollbar_state
+            .content_length(self.user_paths.len());
+
         // Adjust selection if out of bounds
         if self.machine_selected >= self.machine_paths.len() && !self.machine_paths.is_empty() {
             self.machine_selected = self.machine_paths.len() - 1;
+            self.machine_scrollbar_state = self.machine_scrollbar_state.position(self.machine_selected);
         }
         if self.user_selected >= self.user_paths.len() && !self.user_paths.is_empty() {
             self.user_selected = self.user_paths.len() - 1;
+            self.user_scrollbar_state = self.user_scrollbar_state.position(self.user_selected);
         }
     }
 
