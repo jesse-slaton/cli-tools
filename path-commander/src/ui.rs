@@ -92,8 +92,17 @@ impl UI {
                 Style::default().fg(app.theme.path_duplicate_fg),
             ),
             Span::styled(
-                format!("U:{}", stats.user_duplicates),
+                format!("U:{} ", stats.user_duplicates),
                 Style::default().fg(app.theme.path_duplicate_fg),
+            ),
+            Span::raw("│ Non-norm: "),
+            Span::styled(
+                format!("M:{} ", stats.machine_non_normalized),
+                Style::default().fg(app.theme.path_nonnormalized_fg),
+            ),
+            Span::styled(
+                format!("U:{}", stats.user_non_normalized),
+                Style::default().fg(app.theme.path_nonnormalized_fg),
             ),
         ];
 

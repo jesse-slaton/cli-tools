@@ -13,7 +13,7 @@ pub enum PathStatus {
 
 impl PathStatus {
     /// Check if this status indicates a problem
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn is_problematic(&self) -> bool {
         matches!(
             self,
@@ -22,7 +22,7 @@ impl PathStatus {
     }
 
     /// Get a human-readable description
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn description(&self) -> &'static str {
         match self {
             PathStatus::Valid => "Valid",
@@ -36,8 +36,9 @@ impl PathStatus {
 
 /// Information about a path entry
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct PathInfo {
+    /// The original path string before normalization (preserved for debugging and future features)
+    #[allow(dead_code)]
     pub original: String,
     pub normalized: String,
     pub status: PathStatus,
@@ -285,7 +286,7 @@ pub fn expand_environment_variables(path: &str) -> String {
 }
 
 /// Find all duplicate paths across both scopes
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn find_all_duplicates(user_paths: &[String], machine_paths: &[String]) -> HashSet<String> {
     let mut duplicates = HashSet::new();
     let mut seen = HashMap::new();
@@ -313,7 +314,7 @@ pub fn find_all_duplicates(user_paths: &[String], machine_paths: &[String]) -> H
 }
 
 /// Find all dead paths in a list
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn find_dead_paths(paths: &[String]) -> Vec<usize> {
     paths
         .iter()

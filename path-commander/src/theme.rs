@@ -4,12 +4,15 @@ use std::collections::HashMap;
 use std::path::Path;
 
 /// Represents a color theme for Path Commander, compatible with Midnight Commander skins
+///
+/// This struct is fully implemented and actively used in the UI. The `colors` field and
+/// some helper functions are reserved for future MC skin file support (see Issue #2).
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
+#[allow(dead_code)] // Many fields reserved for future MC skin support (Issue #2)
 pub struct Theme {
     /// Theme name
     pub name: String,
-    /// Color definitions from the skin
+    /// Color definitions from the skin (reserved for MC skin file parsing)
     colors: HashMap<String, Color>,
     /// Foreground/background pairs for different UI elements
     pub panel_normal_fg: Color,
@@ -122,7 +125,11 @@ impl Default for Theme {
 }
 
 /// Parse MC color notation (e.g., "rgb524", "color0", "black")
-#[allow(dead_code)]
+///
+/// This function is part of the planned MC skin file support (Issue #2).
+/// Currently used by `parse_mc_color_pair()` for future skin loading.
+/// The implementation is complete and tested, awaiting integration with skin file parsing.
+#[allow(dead_code)] // TODO(Issue #2): Remove when MC skin loading is implemented
 fn parse_mc_color(s: &str) -> Result<Color> {
     let s = s.trim();
 
@@ -175,7 +182,11 @@ fn parse_mc_color(s: &str) -> Result<Color> {
 }
 
 /// Parse MC color pair (e.g., "rgb555;rgb435" or "white;blue")
-#[allow(dead_code)]
+///
+/// This function is part of the planned MC skin file support (Issue #2).
+/// It will be used to parse color pairs from MC .ini skin files.
+/// The implementation is complete and tested, awaiting integration with skin file parsing.
+#[allow(dead_code)] // TODO(Issue #2): Remove when MC skin loading is implemented
 fn parse_mc_color_pair(s: &str, color_map: &HashMap<String, Color>) -> Option<(Color, Color)> {
     let parts: Vec<&str> = s.split(';').collect();
     if parts.len() != 2 {

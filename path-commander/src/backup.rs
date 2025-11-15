@@ -1,6 +1,9 @@
 use anyhow::{Context, Result};
-use chrono::{DateTime, Local};
+use chrono::Local;
 use serde::{Deserialize, Serialize};
+
+#[cfg(test)]
+use chrono::DateTime;
 use std::fs::{self, File};
 use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
@@ -62,7 +65,7 @@ impl PathBackup {
     }
 
     /// Get a formatted display string for this backup
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn display_info(&self) -> String {
         let dt = DateTime::parse_from_rfc3339(&self.timestamp)
             .ok()
@@ -125,7 +128,7 @@ pub fn list_backups(directory: &Path) -> Result<Vec<PathBuf>> {
 }
 
 /// Delete old backups, keeping only the most recent N backups
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn cleanup_old_backups(directory: &Path, keep_count: usize) -> Result<usize> {
     let mut backups = list_backups(directory)?;
 

@@ -1612,7 +1612,6 @@ impl App {
     }
 }
 
-#[allow(dead_code)]
 pub struct Statistics {
     pub machine_total: usize,
     pub user_total: usize,
