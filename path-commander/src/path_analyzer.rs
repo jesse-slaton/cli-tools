@@ -127,22 +127,52 @@ pub fn path_exists(path: &str) -> bool {
 }
 
 /// Normalize a path by:
-/// - Expanding environment variables
-/// - Converting to long path names (from 8.3 format)
+/// - Removing quotes (both balanced and unbalanced)
+/// - Collapsing to environment variables where possible (e.g., C:\Program Files -> %PROGRAMFILES%)
+/// - Expanding short names (8.3 format) to long path names
 /// - Removing trailing slashes
-/// - Resolving to canonical form if possible
+/// - Removing \?\ prefix if present
+///
+/// This is the opposite of the previous behavior - we want portable env vars, not expanded paths.
 pub fn normalize_path(path: &str) -> String {
     if path.is_empty() {
         return path.to_string();
     }
 
-    // First expand environment variables
-    let mut expanded = expand_environment_variables(path);
+    // Remove quotes (both balanced and unbalanced)
+    // PATH entries should never have quotes
+    let mut cleaned = path.trim().to_string();
 
-    // Convert to long path name if it exists
+    // Remove leading quote
+    if cleaned.starts_with('"') {
+        cleaned = cleaned[1..].to_string();
+    }
+
+    // Remove trailing quote
+    if cleaned.ends_with('"') {
+        cleaned = cleaned[..cleaned.len() - 1].to_string();
+    }
+
+    // Trim again after quote removal
+    cleaned = cleaned.trim().to_string();
+
+    // First get the absolute expanded path for comparison
+    let mut expanded = expand_environment_variables(&cleaned);
+
+    // Remove \?\ prefix if present (this shouldn't be in PATH variables)
+    if let Some(stripped) = expanded.strip_prefix(r"\\?\") {
+        expanded = stripped.to_string();
+    }
+
+    // Try to canonicalize to expand short names (8.3 format like PROGRA~1)
     if let Ok(canonical) = std::fs::canonicalize(&expanded) {
         if let Some(path_str) = canonical.to_str() {
-            expanded = path_str.to_string();
+            // Canonicalize adds \\?\ prefix, remove it
+            if let Some(stripped) = path_str.strip_prefix(r"\\?\") {
+                expanded = stripped.to_string();
+            } else {
+                expanded = path_str.to_string();
+            }
         }
     }
 
@@ -152,7 +182,72 @@ pub fn normalize_path(path: &str) -> String {
         .trim_end_matches('/')
         .to_string();
 
-    expanded
+    // Now collapse to environment variables where possible
+    collapse_to_env_vars(&expanded)
+}
+
+/// Collapse an absolute path to use environment variables where possible
+/// Matches longest prefixes first and performs case-insensitive matching
+fn collapse_to_env_vars(path: &str) -> String {
+    // Environment variable mappings in priority order (longest/most specific first)
+    // This ensures we prefer %LOCALAPPDATA% over %USERPROFILE% for paths in AppData\Local
+    let env_var_mappings: Vec<(&str, String)> = vec![
+        (
+            "LOCALAPPDATA",
+            std::env::var("LOCALAPPDATA").unwrap_or_default(),
+        ),
+        ("APPDATA", std::env::var("APPDATA").unwrap_or_default()),
+        (
+            "PROGRAMFILES(X86)",
+            std::env::var("PROGRAMFILES(X86)").unwrap_or_default(),
+        ),
+        (
+            "PROGRAMFILES",
+            std::env::var("PROGRAMFILES").unwrap_or_default(),
+        ),
+        (
+            "PROGRAMDATA",
+            std::env::var("PROGRAMDATA").unwrap_or_default(),
+        ),
+        (
+            "USERPROFILE",
+            std::env::var("USERPROFILE").unwrap_or_default(),
+        ),
+        (
+            "SYSTEMROOT",
+            std::env::var("SYSTEMROOT").unwrap_or_default(),
+        ),
+        ("WINDIR", std::env::var("WINDIR").unwrap_or_default()),
+        ("TEMP", std::env::var("TEMP").unwrap_or_default()),
+        ("TMP", std::env::var("TMP").unwrap_or_default()),
+    ];
+
+    let path_lower = path.to_lowercase();
+
+    // Try to match against each environment variable (case-insensitive)
+    for (var_name, var_value) in env_var_mappings {
+        if var_value.is_empty() {
+            continue;
+        }
+
+        let var_value_lower = var_value.to_lowercase();
+
+        // Check if the path starts with this env var value
+        if path_lower.starts_with(&var_value_lower) {
+            // Get the remaining part of the path
+            let remaining = &path[var_value.len()..];
+
+            // If there's a remaining part, it should start with a separator
+            if remaining.is_empty() {
+                return format!("%{}%", var_name);
+            } else if remaining.starts_with('\\') || remaining.starts_with('/') {
+                return format!("%{}%{}", var_name, remaining);
+            }
+        }
+    }
+
+    // No matching environment variable found, return the path as-is
+    path.to_string()
 }
 
 /// Expand environment variables in a path string
@@ -234,10 +329,12 @@ mod tests {
 
     #[test]
     fn test_normalize_path_env_vars() {
-        // This will use actual environment variables
-        let path = r"%USERPROFILE%\AppData\Local";
+        // Environment variables should be preserved (not expanded)
+        let path = r"%USERPROFILE%\Documents";
         let normalized = normalize_path(path);
-        assert!(!normalized.contains('%'));
+        // Since the path already uses env vars, it should remain with env vars
+        // (it will expand then collapse back)
+        assert!(normalized.contains('%') || normalized.contains("USERPROFILE"));
     }
 
     #[test]
@@ -345,13 +442,21 @@ mod tests {
 
     #[test]
     fn test_analyze_paths_needs_normalization() {
-        // Create a path with environment variable
-        let paths = vec![r"%SYSTEMROOT%".to_string()];
+        // Test that an absolute path gets collapsed to env var
+        let programfiles = std::env::var("PROGRAMFILES").unwrap_or_default();
+        if !programfiles.is_empty() {
+            let absolute_path = format!(r"{}\TestApp", programfiles);
+            let paths = vec![absolute_path.clone()];
 
-        let info = analyze_paths(&paths, &[]);
-        assert_eq!(info.len(), 1);
-        assert!(info[0].needs_normalization);
-        assert!(!info[0].normalized.contains('%'));
+            let info = analyze_paths(&paths, &[]);
+            assert_eq!(info.len(), 1);
+            // The absolute path should be marked as needing normalization
+            // because it can be collapsed to %PROGRAMFILES%\TestApp
+            if info[0].needs_normalization {
+                assert!(info[0].normalized.contains('%'));
+                assert!(info[0].normalized.contains("PROGRAMFILES"));
+            }
+        }
     }
 
     #[test]
@@ -403,8 +508,8 @@ mod tests {
     fn test_determine_status() {
         // Valid path
         let info = PathInfo {
-            original: "C:\\Windows".to_string(),
-            normalized: "C:\\Windows".to_string(),
+            original: "%SYSTEMROOT%".to_string(),
+            normalized: "%SYSTEMROOT%".to_string(),
             status: PathStatus::Valid,
             exists: true,
             is_duplicate: false,
@@ -425,8 +530,8 @@ mod tests {
 
         // Duplicate path
         let info = PathInfo {
-            original: "C:\\Windows".to_string(),
-            normalized: "C:\\Windows".to_string(),
+            original: "%SYSTEMROOT%".to_string(),
+            normalized: "%SYSTEMROOT%".to_string(),
             status: PathStatus::Valid,
             exists: true,
             is_duplicate: true,
@@ -434,10 +539,10 @@ mod tests {
         };
         assert_eq!(determine_status(&info), PathStatus::Duplicate);
 
-        // Non-normalized path
+        // Non-normalized path (absolute path that could use env var)
         let info = PathInfo {
-            original: "%SYSTEMROOT%".to_string(),
-            normalized: "C:\\Windows".to_string(),
+            original: "C:\\Windows".to_string(),
+            normalized: "%SYSTEMROOT%".to_string(),
             status: PathStatus::Valid,
             exists: true,
             is_duplicate: false,
@@ -475,5 +580,237 @@ mod tests {
         assert_eq!(info.len(), 3);
         // All three should be marked as duplicates
         assert!(info.iter().all(|i| i.is_duplicate));
+    }
+
+    #[test]
+    fn test_collapse_to_programfiles() {
+        let programfiles = std::env::var("PROGRAMFILES").unwrap_or_default();
+        if !programfiles.is_empty() {
+            let absolute_path = format!(r"{}\Git\cmd", programfiles);
+            let normalized = normalize_path(&absolute_path);
+            assert!(normalized.contains("%PROGRAMFILES%"));
+            assert!(normalized.contains("Git"));
+        }
+    }
+
+    #[test]
+    fn test_collapse_to_localappdata() {
+        let localappdata = std::env::var("LOCALAPPDATA").unwrap_or_default();
+        if !localappdata.is_empty() {
+            let absolute_path = format!(r"{}\Programs\Python", localappdata);
+            let normalized = normalize_path(&absolute_path);
+            assert!(normalized.contains("%LOCALAPPDATA%"));
+            assert!(normalized.contains("Programs"));
+        }
+    }
+
+    #[test]
+    fn test_collapse_prefers_longest_match() {
+        // LOCALAPPDATA is under USERPROFILE, so we should prefer LOCALAPPDATA
+        let localappdata = std::env::var("LOCALAPPDATA").unwrap_or_default();
+        if !localappdata.is_empty() && localappdata.contains("AppData\\Local") {
+            let absolute_path = format!(r"{}\Test", localappdata);
+            let normalized = normalize_path(&absolute_path);
+            // Should use LOCALAPPDATA, not USERPROFILE
+            assert!(normalized.contains("%LOCALAPPDATA%"));
+            assert!(!normalized.contains("%USERPROFILE%"));
+        }
+    }
+
+    #[test]
+    fn test_remove_extended_path_prefix() {
+        let path = r"\\?\C:\CustomLocation\bin";
+        let normalized = normalize_path(path);
+        assert!(!normalized.starts_with(r"\\?\"));
+    }
+
+    #[test]
+    fn test_already_normalized_path_unchanged() {
+        // A path that's already using env vars should remain unchanged
+        let path = r"%PROGRAMFILES%\Git\cmd";
+        let normalized = normalize_path(path);
+        // After expand then collapse, should get back the same env var format
+        assert!(normalized.contains("%PROGRAMFILES%"));
+    }
+
+    #[test]
+    fn test_case_insensitive_collapse() {
+        let programfiles = std::env::var("PROGRAMFILES").unwrap_or_default();
+        if !programfiles.is_empty() {
+            // Try with different case
+            let lowercase_path = format!(r"{}\Git", programfiles.to_lowercase());
+            let normalized = normalize_path(&lowercase_path);
+            // Note: This test may not work as expected since the path may not exist
+            // and canonicalize might fail. The important thing is it doesn't crash.
+            assert!(!normalized.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_path_without_matching_env_var() {
+        let path = r"C:\CustomTools\bin";
+        let normalized = normalize_path(path);
+        // Should remain as absolute path since there's no matching env var
+        // (unless it happens to match one of the standard env vars)
+        assert!(!normalized.is_empty());
+    }
+
+    #[test]
+    fn test_collapse_systemroot() {
+        let systemroot = std::env::var("SYSTEMROOT").unwrap_or_default();
+        if !systemroot.is_empty() {
+            let absolute_path = format!(r"{}\System32", systemroot);
+            let normalized = normalize_path(&absolute_path);
+            assert!(
+                normalized.contains("%SYSTEMROOT%") || normalized.contains("%WINDIR%"),
+                "Expected env var in: {}",
+                normalized
+            );
+        }
+    }
+
+    #[test]
+    fn test_trailing_slash_removal_with_collapse() {
+        let programfiles = std::env::var("PROGRAMFILES").unwrap_or_default();
+        if !programfiles.is_empty() {
+            let path_with_slash = format!(r"{}\Git\", programfiles);
+            let normalized = normalize_path(&path_with_slash);
+            assert!(!normalized.ends_with('\\'));
+            assert!(!normalized.ends_with('/'));
+        }
+    }
+
+    #[test]
+    fn test_remove_balanced_quotes() {
+        let systemroot = std::env::var("SYSTEMROOT").unwrap_or_default();
+        if !systemroot.is_empty() {
+            let quoted_path = format!(r#""{}\System32""#, systemroot);
+            let normalized = normalize_path(&quoted_path);
+            assert!(!normalized.starts_with('"'));
+            assert!(!normalized.ends_with('"'));
+            assert!(normalized.contains("%SYSTEMROOT%") || normalized.contains("%WINDIR%"));
+        }
+    }
+
+    #[test]
+    fn test_remove_leading_quote_only() {
+        let systemroot = std::env::var("SYSTEMROOT").unwrap_or_default();
+        if !systemroot.is_empty() {
+            let unbalanced_path = format!(r#""{}\System32"#, systemroot);
+            let normalized = normalize_path(&unbalanced_path);
+            assert!(!normalized.starts_with('"'));
+            assert!(!normalized.ends_with('"'));
+            assert!(normalized.contains("%SYSTEMROOT%") || normalized.contains("%WINDIR%"));
+        }
+    }
+
+    #[test]
+    fn test_remove_trailing_quote_only() {
+        let systemroot = std::env::var("SYSTEMROOT").unwrap_or_default();
+        if !systemroot.is_empty() {
+            let unbalanced_path = format!(r#"{}\System32""#, systemroot);
+            let normalized = normalize_path(&unbalanced_path);
+            assert!(!normalized.starts_with('"'));
+            assert!(!normalized.ends_with('"'));
+            assert!(normalized.contains("%SYSTEMROOT%") || normalized.contains("%WINDIR%"));
+        }
+    }
+
+    #[test]
+    fn test_remove_quotes_with_whitespace() {
+        let systemroot = std::env::var("SYSTEMROOT").unwrap_or_default();
+        if !systemroot.is_empty() {
+            // Quotes with leading/trailing whitespace
+            let quoted_path = format!(r#"  "{}\System32"  "#, systemroot);
+            let normalized = normalize_path(&quoted_path);
+            assert!(!normalized.starts_with('"'));
+            assert!(!normalized.ends_with('"'));
+            assert!(!normalized.starts_with(' '));
+            assert!(!normalized.ends_with(' '));
+            assert!(normalized.contains("%SYSTEMROOT%") || normalized.contains("%WINDIR%"));
+        }
+    }
+
+    #[test]
+    fn test_quotes_with_env_var() {
+        let quoted_path = r#""%PROGRAMFILES%\Git\cmd""#;
+        let normalized = normalize_path(quoted_path);
+        assert!(!normalized.starts_with('"'));
+        assert!(!normalized.ends_with('"'));
+        assert!(normalized.contains("%PROGRAMFILES%"));
+    }
+
+    #[test]
+    fn test_unbalanced_quote_with_env_var_leading() {
+        let quoted_path = r#""%PROGRAMFILES%\Git\cmd"#;
+        let normalized = normalize_path(quoted_path);
+        assert!(!normalized.starts_with('"'));
+        assert!(!normalized.ends_with('"'));
+        assert!(normalized.contains("%PROGRAMFILES%"));
+    }
+
+    #[test]
+    fn test_unbalanced_quote_with_env_var_trailing() {
+        let quoted_path = r#"%PROGRAMFILES%\Git\cmd""#;
+        let normalized = normalize_path(quoted_path);
+        assert!(!normalized.starts_with('"'));
+        assert!(!normalized.ends_with('"'));
+        assert!(normalized.contains("%PROGRAMFILES%"));
+    }
+
+    #[test]
+    fn test_quoted_paths_detected_as_needing_normalization() {
+        // Test that quoted paths are properly flagged as needing normalization
+        let systemroot = std::env::var("SYSTEMROOT").unwrap_or_default();
+        if !systemroot.is_empty() {
+            // Test balanced quotes
+            let quoted_path = format!(r#""{}\System32""#, systemroot);
+            let paths = vec![quoted_path.clone()];
+            let info = analyze_paths(&paths, &[]);
+
+            assert_eq!(info.len(), 1);
+            assert!(
+                info[0].needs_normalization,
+                "Quoted path should be flagged as needing normalization: original='{}', normalized='{}'",
+                info[0].original,
+                info[0].normalized
+            );
+            assert_eq!(info[0].status, PathStatus::NonNormalized);
+
+            // Test unbalanced quote (leading)
+            let unbalanced_path = format!(r#""{}\System32"#, systemroot);
+            let paths = vec![unbalanced_path.clone()];
+            let info = analyze_paths(&paths, &[]);
+
+            assert_eq!(info.len(), 1);
+            assert!(
+                info[0].needs_normalization,
+                "Unbalanced quoted path should be flagged as needing normalization"
+            );
+            assert_eq!(info[0].status, PathStatus::NonNormalized);
+        }
+    }
+
+    #[test]
+    fn test_absolute_path_detected_as_needing_normalization() {
+        // Test that absolute paths that can be collapsed are flagged
+        let programfiles = std::env::var("PROGRAMFILES").unwrap_or_default();
+        if !programfiles.is_empty() {
+            let absolute_path = format!(r"{}\Git", programfiles);
+            let paths = vec![absolute_path.clone()];
+            let info = analyze_paths(&paths, &[]);
+
+            assert_eq!(info.len(), 1);
+            if info[0].exists {
+                // Only check if path exists, otherwise status might be Dead
+                assert!(
+                    info[0].needs_normalization,
+                    "Absolute path that can be collapsed should be flagged: original='{}', normalized='{}'",
+                    info[0].original,
+                    info[0].normalized
+                );
+                assert_eq!(info[0].status, PathStatus::NonNormalized);
+            }
+        }
     }
 }

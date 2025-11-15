@@ -1933,7 +1933,14 @@ mod tests {
 
     #[test]
     fn test_normalize_selected() {
-        let mut app = create_test_app(vec![], vec![r"%SYSTEMROOT%".to_string()]);
+        // Test with an absolute path that should be collapsed to an env var
+        let systemroot = std::env::var("SYSTEMROOT").unwrap_or_default();
+        if systemroot.is_empty() {
+            return; // Skip test if SYSTEMROOT is not set
+        }
+
+        let absolute_path = format!(r"{}\System32", systemroot);
+        let mut app = create_test_app(vec![], vec![absolute_path.clone()]);
         app.reanalyze();
 
         app.user_selected = 0;
@@ -1941,8 +1948,12 @@ mod tests {
         app.user_marked.insert(0);
         app.normalize_selected();
 
-        // Path should be normalized (no % signs)
-        assert!(!app.user_paths[0].contains('%'));
+        // Path should be normalized to use environment variables
+        assert!(
+            app.user_paths[0].contains('%'),
+            "Expected normalized path to contain env var, got: {}",
+            app.user_paths[0]
+        );
         assert!(app.has_changes);
     }
 
