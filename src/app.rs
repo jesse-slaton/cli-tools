@@ -47,6 +47,8 @@ pub enum ConfirmAction {
     DeleteAllDuplicates,
     ApplyChanges,
     RestoreBackup,
+    CreateSingleDirectory,
+    CreateMarkedDirectories,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,6 +80,7 @@ pub struct App {
     pub user_scrollbar_state: ScrollbarState,
     pub should_exit: bool,
     pub viewport_height: u16,
+    pub pending_directory: String, // Temporarily stores path for directory creation confirmation
 }
 
 impl App {
@@ -118,6 +121,7 @@ impl App {
             backup_selected: 0,
             should_exit: false,
             viewport_height: 10, // Default, will be updated based on terminal size
+            pending_directory: String::new(),
         })
     }
 
@@ -181,6 +185,14 @@ impl App {
                 self.mode = Mode::Confirm(ConfirmAction::DeleteAllDead);
             }
             (KeyCode::F(9), _) => self.normalize_selected(),
+            (KeyCode::F(11), _) => {
+                // Create marked dead directories
+                if self.has_marked_dead_paths() {
+                    self.mode = Mode::Confirm(ConfirmAction::CreateMarkedDirectories);
+                } else {
+                    self.set_status("No marked dead paths to create");
+                }
+            }
             (KeyCode::F(1), _) | (KeyCode::Char('?'), _) => {
                 self.mode = Mode::Help;
             }
@@ -241,6 +253,8 @@ impl App {
                     ConfirmAction::DeleteAllDuplicates => self.delete_all_duplicates()?,
                     ConfirmAction::ApplyChanges => self.apply_changes()?,
                     ConfirmAction::RestoreBackup => self.restore_selected_backup()?,
+                    ConfirmAction::CreateSingleDirectory => self.create_single_directory()?,
+                    ConfirmAction::CreateMarkedDirectories => self.create_marked_directories()?,
                 }
             }
             KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
@@ -615,6 +629,8 @@ impl App {
                         ConfirmAction::DeleteAllDuplicates => self.delete_all_duplicates()?,
                         ConfirmAction::ApplyChanges => self.apply_changes()?,
                         ConfirmAction::RestoreBackup => self.restore_selected_backup()?,
+                        ConfirmAction::CreateSingleDirectory => self.create_single_directory()?,
+                        ConfirmAction::CreateMarkedDirectories => self.create_marked_directories()?,
                     }
                 }
             } else if relative_x >= no_x.saturating_sub(2) && relative_x <= no_x + 2 {
@@ -682,6 +698,18 @@ impl App {
 
     fn has_marked_items(&self) -> bool {
         !self.machine_marked.is_empty() || !self.user_marked.is_empty()
+    }
+
+    fn has_marked_dead_paths(&self) -> bool {
+        // Check if any marked items in the active panel are dead paths
+        match self.active_panel {
+            Panel::Machine => self.machine_marked.iter().any(|&idx| {
+                idx < self.machine_info.len() && !self.machine_info[idx].exists
+            }),
+            Panel::User => self.user_marked.iter().any(|&idx| {
+                idx < self.user_info.len() && !self.user_info[idx].exists
+            }),
+        }
     }
 
     // Path modification
@@ -900,6 +928,22 @@ impl App {
             return Ok(());
         }
 
+        // Check if directory exists
+        let expanded = normalize_path(&self.input_buffer);
+        if !std::path::Path::new(&expanded).exists() {
+            // Directory doesn't exist - check if we can create it
+            if Self::can_create_directory(&self.input_buffer) {
+                // Store the path and ask for confirmation
+                self.pending_directory = self.input_buffer.clone();
+                self.mode = Mode::Confirm(ConfirmAction::CreateSingleDirectory);
+                return Ok(());
+            } else {
+                // Can't create (network path, invalid chars, etc.) - add anyway as dead path
+                self.set_status("Warning: Path cannot be auto-created (network or invalid). Adding as dead path.");
+            }
+        }
+
+        // Directory exists or can't be created - add it
         match self.active_panel {
             Panel::Machine => {
                 if !self.is_admin {
@@ -1024,6 +1068,163 @@ impl App {
         } else {
             self.should_exit = true;
         }
+    }
+
+    /// Check if a directory can be created (not network path, valid chars, etc.)
+    fn can_create_directory(path: &str) -> bool {
+        if path.is_empty() {
+            return false;
+        }
+
+        // Check if it's a network path (starts with \\ or //)
+        if path.starts_with("\\\\") || path.starts_with("//") {
+            return false;
+        }
+
+        // Check for invalid characters (basic check)
+        let invalid_chars = ['<', '>', '|', '\"', '?', '*'];
+        if path.chars().any(|c| invalid_chars.contains(&c)) {
+            return false;
+        }
+
+        // Path should have a drive letter on Windows or be a relative path
+        // Simple check: if it has a colon, it should be at position 1 (like C:)
+        if let Some(colon_pos) = path.find(':') {
+            if colon_pos != 1 {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Create a directory and its parent directories
+    fn create_directory(path: &str) -> Result<()> {
+        use std::fs;
+        use std::path::Path;
+
+        if path.is_empty() {
+            return Err(anyhow::anyhow!("Path is empty"));
+        }
+
+        // Expand environment variables
+        let expanded = normalize_path(path);
+        let path_obj = Path::new(&expanded);
+
+        // Create directory with parents
+        fs::create_dir_all(path_obj)?;
+
+        Ok(())
+    }
+
+    /// Create the pending directory and add the path
+    fn create_single_directory(&mut self) -> Result<()> {
+        if self.pending_directory.is_empty() {
+            return Ok(());
+        }
+
+        match Self::create_directory(&self.pending_directory) {
+            Ok(()) => {
+                // Directory created successfully - now add the path
+                match self.active_panel {
+                    Panel::Machine => {
+                        if !self.is_admin {
+                            self.set_status("Need admin rights to add MACHINE paths");
+                            return Ok(());
+                        }
+                        self.machine_paths.push(self.pending_directory.clone());
+                    }
+                    Panel::User => {
+                        self.user_paths.push(self.pending_directory.clone());
+                    }
+                }
+
+                self.reanalyze();
+                self.has_changes = true;
+                self.set_status(&format!("Created directory and added: {}", self.pending_directory));
+                self.pending_directory.clear();
+                Ok(())
+            }
+            Err(e) => {
+                self.set_status(&format!("Failed to create directory: {}", e));
+                self.pending_directory.clear();
+                Err(e)
+            }
+        }
+    }
+
+    /// Create all marked dead directories
+    fn create_marked_directories(&mut self) -> Result<()> {
+        let mut created_count = 0;
+        let mut skipped_count = 0;
+        let mut failed_paths = Vec::new();
+
+        // Collect all marked dead paths
+        let marked_paths: Vec<(usize, String)> = match self.active_panel {
+            Panel::Machine => self
+                .machine_marked
+                .iter()
+                .filter_map(|&idx| {
+                    if idx < self.machine_paths.len() && idx < self.machine_info.len() {
+                        if !self.machine_info[idx].exists {
+                            Some((idx, self.machine_paths[idx].clone()))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+            Panel::User => self
+                .user_marked
+                .iter()
+                .filter_map(|&idx| {
+                    if idx < self.user_paths.len() && idx < self.user_info.len() {
+                        if !self.user_info[idx].exists {
+                            Some((idx, self.user_paths[idx].clone()))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+        };
+
+        // Try to create each directory
+        for (_idx, path) in marked_paths {
+            if !Self::can_create_directory(&path) {
+                skipped_count += 1;
+                continue;
+            }
+
+            match Self::create_directory(&path) {
+                Ok(()) => created_count += 1,
+                Err(_) => {
+                    failed_paths.push(path);
+                }
+            }
+        }
+
+        // Reanalyze to update dead path status
+        if created_count > 0 {
+            self.reanalyze();
+            self.has_changes = true;
+        }
+
+        // Show status message
+        let mut msg = format!("Created {} directories", created_count);
+        if skipped_count > 0 {
+            msg.push_str(&format!(", skipped {} (network/invalid)", skipped_count));
+        }
+        if !failed_paths.is_empty() {
+            msg.push_str(&format!(", failed {} paths", failed_paths.len()));
+        }
+        self.set_status(&msg);
+
+        Ok(())
     }
 
     fn reanalyze(&mut self) {

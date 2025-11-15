@@ -356,6 +356,12 @@ impl UI {
                 "Apply changes to Windows Registry?\n\nThis will modify your PATH environment variables."
             }
             ConfirmAction::RestoreBackup => "Restore from selected backup?",
+            ConfirmAction::CreateSingleDirectory => {
+                "Directory does not exist.\n\nCreate directory and add to PATH?"
+            }
+            ConfirmAction::CreateMarkedDirectories => {
+                "Create all marked dead directories?\n\n(Network paths and invalid paths will be skipped)"
+            }
         };
 
         let text = vec![
