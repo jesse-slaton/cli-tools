@@ -92,40 +92,49 @@ fn run_app<B: ratatui::backend::Backend>(
     loop {
         terminal.draw(|f| ui.render(f, app))?;
 
-        if let Event::Key(key) = event::read()? {
-            let now = std::time::Instant::now();
-            let elapsed = now.duration_since(last_event_time);
+        match event::read()? {
+            Event::Key(key) => {
+                let now = std::time::Instant::now();
+                let elapsed = now.duration_since(last_event_time);
 
-            // Filter duplicate events within 200ms window (Windows/MSYS2 console buffering)
-            // Conservative threshold to catch all buffering delays while staying well below
-            // human key repeat timing (typically 250-500ms)
-            let is_duplicate = last_key_code == Some(key.code)
-                && elapsed < std::time::Duration::from_millis(200);
+                // Filter duplicate events within 200ms window (Windows/MSYS2 console buffering)
+                // Conservative threshold to catch all buffering delays while staying well below
+                // human key repeat timing (typically 250-500ms)
+                let is_duplicate = last_key_code == Some(key.code)
+                    && elapsed < std::time::Duration::from_millis(200);
 
-            if !is_duplicate {
-                last_key_code = Some(key.code);
-                last_event_time = now;
+                if !is_duplicate {
+                    last_key_code = Some(key.code);
+                    last_event_time = now;
 
-                // Global shortcuts
-                match (key.code, key.modifiers) {
-                    (KeyCode::Char('c'), KeyModifiers::CONTROL) => break,
-                    (KeyCode::Char('q'), KeyModifiers::NONE) => {
-                        if app.confirm_exit() {
-                            break;
+                    // Global shortcuts
+                    match (key.code, key.modifiers) {
+                        (KeyCode::Char('c'), KeyModifiers::CONTROL) => break,
+                        (KeyCode::Char('q'), KeyModifiers::NONE) => {
+                            if app.confirm_exit() {
+                                break;
+                            }
                         }
-                    }
-                    (KeyCode::F(10), _) | (KeyCode::Esc, _) => {
-                        if app.confirm_exit() {
-                            break;
+                        (KeyCode::F(10), _) | (KeyCode::Esc, _) => {
+                            if app.confirm_exit() {
+                                break;
+                            }
                         }
-                    }
-                    _ => {
-                        // Handle input in app
-                        app.handle_input(key)?;
+                        _ => {
+                            // Handle input in app
+                            app.handle_input(key)?;
+                        }
                     }
                 }
+                // Duplicate events are silently dropped
             }
-            // Duplicate events are silently dropped
+            Event::Mouse(mouse) => {
+                // Handle mouse events (clicks, scrolling)
+                let size = terminal.size()?;
+                let rect = ratatui::layout::Rect::new(0, 0, size.width, size.height);
+                app.handle_mouse(mouse, rect)?;
+            }
+            _ => {}
         }
     }
 

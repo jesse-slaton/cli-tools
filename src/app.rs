@@ -1,6 +1,6 @@
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::widgets::ScrollbarState;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind, MouseButton};
+use ratatui::{layout::Rect, widgets::ScrollbarState};
 use std::collections::HashSet;
 
 use crate::backup::{self, PathBackup};
@@ -277,6 +277,207 @@ impl App {
             }
             _ => {}
         }
+        Ok(())
+    }
+
+    // Mouse event handling
+    pub fn handle_mouse(&mut self, mouse: MouseEvent, terminal_size: Rect) -> Result<()> {
+        // Only handle mouse in Normal mode
+        if self.mode != Mode::Normal {
+            return Ok(());
+        }
+
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                self.handle_mouse_click(mouse.column, mouse.row, terminal_size, mouse.modifiers)?;
+            }
+            MouseEventKind::ScrollUp => {
+                // Scroll up = content moves up = view moves down in list
+                self.move_selection(1);
+            }
+            MouseEventKind::ScrollDown => {
+                // Scroll down = content moves down = view moves up in list
+                self.move_selection(-1);
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    fn handle_mouse_click(&mut self, x: u16, y: u16, terminal_size: Rect, modifiers: KeyModifiers) -> Result<()> {
+        // Calculate layout (same as ui.rs render_main)
+        let header_height = 3;
+        let status_height = 3;
+        let hints_height = 2;
+
+        // Main content area
+        let content_start = header_height;
+        let content_end = terminal_size.height - status_height - hints_height;
+
+        // Check if click is in main content area
+        if y < content_start || y >= content_end {
+            return Ok(());
+        }
+
+        // Determine which panel was clicked (50/50 split)
+        let panel_width = terminal_size.width / 2;
+        let clicked_panel = if x < panel_width {
+            Panel::Machine
+        } else {
+            Panel::User
+        };
+
+        // Get panel-specific coordinates
+        let panel_x_offset = if clicked_panel == Panel::Machine {
+            0
+        } else {
+            panel_width
+        };
+        let relative_x = x - panel_x_offset;
+        let relative_y = y - content_start;
+
+        // Check if click is on scrollbar (second-to-last column, before right border)
+        let scrollbar_x = panel_width - 2;
+        if relative_x == scrollbar_x {
+            // Clicked on scrollbar - jump to position
+            let border_top: u16 = 1;
+            let border_bottom: u16 = 1;
+            let content_height = (content_end - content_start) as u16;
+            let scrollbar_height = content_height.saturating_sub(border_top + border_bottom) as usize;
+
+            if scrollbar_height > 0 {
+                let click_pos = relative_y.saturating_sub(border_top) as usize;
+                let paths = match clicked_panel {
+                    Panel::Machine => &self.machine_paths,
+                    Panel::User => &self.user_paths,
+                };
+
+                if !paths.is_empty() && click_pos < scrollbar_height {
+                    // Calculate target position as percentage
+                    let target_pos = (click_pos * paths.len()) / scrollbar_height;
+                    let target_pos = target_pos.min(paths.len().saturating_sub(1));
+
+                    self.active_panel = clicked_panel;
+                    self.move_selection_to(target_pos);
+                }
+            }
+            return Ok(());
+        }
+
+        // Check if click is on border (first or last column of panel)
+        if relative_x == 0 || relative_x >= panel_width - 1 {
+            // Clicked on panel border - switch to this panel
+            self.active_panel = clicked_panel;
+            return Ok(());
+        }
+
+        // Click is inside panel content
+        // Account for: top border (1) + title (0, included in border)
+        let border_top = 1;
+
+        // Check if click is on border row
+        if relative_y == 0 {
+            // Clicked on top border/title - switch to this panel
+            self.active_panel = clicked_panel;
+            return Ok(());
+        }
+
+        // Calculate list item index (0-based)
+        // relative_y - border_top = row in list
+        let list_row = relative_y.saturating_sub(border_top) as usize;
+
+        // Get current panel's paths
+        let paths = match clicked_panel {
+            Panel::Machine => &self.machine_paths,
+            Panel::User => &self.user_paths,
+        };
+
+        // Check if list_row is valid
+        if list_row >= paths.len() {
+            // Clicked below last item - just switch panel
+            self.active_panel = clicked_panel;
+            return Ok(());
+        }
+
+        // Handle Ctrl+Click: Toggle mark on clicked item without changing selection
+        if modifiers.contains(KeyModifiers::CONTROL) {
+            match clicked_panel {
+                Panel::Machine => {
+                    if self.machine_marked.contains(&list_row) {
+                        self.machine_marked.remove(&list_row);
+                    } else {
+                        self.machine_marked.insert(list_row);
+                    }
+                }
+                Panel::User => {
+                    if self.user_marked.contains(&list_row) {
+                        self.user_marked.remove(&list_row);
+                    } else {
+                        self.user_marked.insert(list_row);
+                    }
+                }
+            }
+            return Ok(());
+        }
+
+        // Handle Shift+Click: Range select from current selection to clicked item
+        if modifiers.contains(KeyModifiers::SHIFT) {
+            let current_selection = match clicked_panel {
+                Panel::Machine => self.machine_selected,
+                Panel::User => self.user_selected,
+            };
+
+            let start = current_selection.min(list_row);
+            let end = current_selection.max(list_row);
+
+            match clicked_panel {
+                Panel::Machine => {
+                    for i in start..=end {
+                        self.machine_marked.insert(i);
+                    }
+                }
+                Panel::User => {
+                    for i in start..=end {
+                        self.user_marked.insert(i);
+                    }
+                }
+            }
+
+            self.active_panel = clicked_panel;
+            self.move_selection_to(list_row);
+            return Ok(());
+        }
+
+        // Normal click: Switch to this panel and select the item
+        self.active_panel = clicked_panel;
+        self.move_selection_to(list_row);
+
+        // Check if click is on checkbox area
+        // Checkbox is at relative_x = 1 (border) to 5 (border + "[ ] ")
+        let checkbox_start = 1; // After left border
+        let checkbox_end = 5; // "[ ] " is 4 chars
+
+        if relative_x >= checkbox_start && relative_x < checkbox_end {
+            // Clicked on checkbox - toggle mark (without auto-advance)
+            match self.active_panel {
+                Panel::Machine => {
+                    if self.machine_marked.contains(&self.machine_selected) {
+                        self.machine_marked.remove(&self.machine_selected);
+                    } else {
+                        self.machine_marked.insert(self.machine_selected);
+                    }
+                }
+                Panel::User => {
+                    if self.user_marked.contains(&self.user_selected) {
+                        self.user_marked.remove(&self.user_selected);
+                    } else {
+                        self.user_marked.insert(self.user_selected);
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 
