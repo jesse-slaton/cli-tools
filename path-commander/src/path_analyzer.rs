@@ -4,15 +4,16 @@ use std::path::Path;
 /// Status of a path entry
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PathStatus {
-    Valid,          // Exists, unique, normalized
-    Dead,           // Does not exist
-    Duplicate,      // Duplicate within same scope or across scopes
-    NonNormalized,  // Contains short names, env vars, or can be expanded
-    DeadDuplicate,  // Both dead and duplicate
+    Valid,         // Exists, unique, normalized
+    Dead,          // Does not exist
+    Duplicate,     // Duplicate within same scope or across scopes
+    NonNormalized, // Contains short names, env vars, or can be expanded
+    DeadDuplicate, // Both dead and duplicate
 }
 
 impl PathStatus {
     /// Check if this status indicates a problem
+    #[allow(dead_code)]
     pub fn is_problematic(&self) -> bool {
         matches!(
             self,
@@ -21,6 +22,7 @@ impl PathStatus {
     }
 
     /// Get a human-readable description
+    #[allow(dead_code)]
     pub fn description(&self) -> &'static str {
         match self {
             PathStatus::Valid => "Valid",
@@ -34,6 +36,7 @@ impl PathStatus {
 
 /// Information about a path entry
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct PathInfo {
     pub original: String,
     pub normalized: String,
@@ -144,7 +147,10 @@ pub fn normalize_path(path: &str) -> String {
     }
 
     // Remove trailing backslash/slash
-    expanded = expanded.trim_end_matches('\\').trim_end_matches('/').to_string();
+    expanded = expanded
+        .trim_end_matches('\\')
+        .trim_end_matches('/')
+        .to_string();
 
     expanded
 }
@@ -184,6 +190,7 @@ pub fn expand_environment_variables(path: &str) -> String {
 }
 
 /// Find all duplicate paths across both scopes
+#[allow(dead_code)]
 pub fn find_all_duplicates(user_paths: &[String], machine_paths: &[String]) -> HashSet<String> {
     let mut duplicates = HashSet::new();
     let mut seen = HashMap::new();
@@ -211,6 +218,7 @@ pub fn find_all_duplicates(user_paths: &[String], machine_paths: &[String]) -> H
 }
 
 /// Find all dead paths in a list
+#[allow(dead_code)]
 pub fn find_dead_paths(paths: &[String]) -> Vec<usize> {
     paths
         .iter()
@@ -225,11 +233,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_normalize_path() {
+    fn test_normalize_path_env_vars() {
         // This will use actual environment variables
         let path = r"%USERPROFILE%\AppData\Local";
         let normalized = normalize_path(path);
         assert!(!normalized.contains('%'));
+    }
+
+    #[test]
+    fn test_normalize_path_trailing_slash() {
+        let path = r"C:\Windows\";
+        let normalized = normalize_path(path);
+        assert!(!normalized.ends_with('\\'));
+        assert!(!normalized.ends_with('/'));
+    }
+
+    #[test]
+    fn test_normalize_path_empty() {
+        let path = "";
+        let normalized = normalize_path(path);
+        assert_eq!(normalized, "");
+    }
+
+    #[test]
+    fn test_expand_environment_variables() {
+        // Test %VAR% format
+        let userprofile = std::env::var("USERPROFILE").unwrap();
+        let path = r"%USERPROFILE%\test";
+        let expanded = expand_environment_variables(path);
+        assert_eq!(expanded, format!(r"{}\test", userprofile));
+
+        // Test case-insensitive
+        let path_lower = r"%userprofile%\test";
+        let expanded_lower = expand_environment_variables(path_lower);
+        assert_eq!(expanded_lower, format!(r"{}\test", userprofile));
     }
 
     #[test]
@@ -239,7 +276,18 @@ mod tests {
     }
 
     #[test]
-    fn test_find_duplicates() {
+    fn test_path_exists_empty() {
+        assert!(!path_exists(""));
+    }
+
+    #[test]
+    fn test_path_exists_with_env_var() {
+        // Test that environment variables are expanded before checking
+        assert!(path_exists(r"%SYSTEMROOT%"));
+    }
+
+    #[test]
+    fn test_find_duplicates_case_insensitive() {
         let paths = vec![
             r"C:\Windows".to_string(),
             r"C:\windows".to_string(), // Case variation
@@ -247,11 +295,185 @@ mod tests {
         ];
 
         let info = analyze_paths(&paths, &[]);
-        let duplicates: Vec<_> = info
-            .iter()
-            .filter(|i| i.is_duplicate)
-            .collect();
+        let duplicates: Vec<_> = info.iter().filter(|i| i.is_duplicate).collect();
 
         assert_eq!(duplicates.len(), 2); // The two Windows entries
+    }
+
+    #[test]
+    fn test_analyze_paths_no_duplicates() {
+        let paths = vec![r"C:\Windows".to_string(), r"C:\Program Files".to_string()];
+
+        let info = analyze_paths(&paths, &[]);
+        assert_eq!(info.len(), 2);
+        assert!(!info[0].is_duplicate);
+        assert!(!info[1].is_duplicate);
+    }
+
+    #[test]
+    fn test_analyze_paths_cross_scope_duplicates() {
+        let user_paths = vec![r"C:\Windows".to_string()];
+        let machine_paths = vec![r"C:\windows".to_string()]; // Case variation
+
+        let info = analyze_paths(&user_paths, &machine_paths);
+        assert_eq!(info.len(), 1);
+        assert!(info[0].is_duplicate);
+    }
+
+    #[test]
+    fn test_analyze_paths_dead_path() {
+        let paths = vec![r"C:\ThisPathDoesNotExist123456".to_string()];
+
+        let info = analyze_paths(&paths, &[]);
+        assert_eq!(info.len(), 1);
+        assert_eq!(info[0].status, PathStatus::Dead);
+        assert!(!info[0].exists);
+    }
+
+    #[test]
+    fn test_analyze_paths_dead_duplicate() {
+        let paths = vec![
+            r"C:\NonExistent1".to_string(),
+            r"C:\NonExistent1".to_string(),
+        ];
+
+        let info = analyze_paths(&paths, &[]);
+        assert_eq!(info.len(), 2);
+        assert_eq!(info[0].status, PathStatus::DeadDuplicate);
+        assert_eq!(info[1].status, PathStatus::DeadDuplicate);
+    }
+
+    #[test]
+    fn test_analyze_paths_needs_normalization() {
+        // Create a path with environment variable
+        let paths = vec![r"%SYSTEMROOT%".to_string()];
+
+        let info = analyze_paths(&paths, &[]);
+        assert_eq!(info.len(), 1);
+        assert!(info[0].needs_normalization);
+        assert!(!info[0].normalized.contains('%'));
+    }
+
+    #[test]
+    fn test_find_all_duplicates() {
+        let user_paths = vec![r"C:\Windows".to_string(), r"C:\Program Files".to_string()];
+        let machine_paths = vec![
+            r"C:\windows".to_string(), // Duplicate of user path
+            r"C:\Temp".to_string(),
+        ];
+
+        let duplicates = find_all_duplicates(&user_paths, &machine_paths);
+        assert!(duplicates.contains(&normalize_path(r"C:\Windows").to_lowercase()));
+    }
+
+    #[test]
+    fn test_find_dead_paths() {
+        let paths = vec![
+            r"C:\Windows".to_string(),
+            r"C:\NonExistent1".to_string(),
+            r"C:\Program Files".to_string(),
+            r"C:\NonExistent2".to_string(),
+        ];
+
+        let dead = find_dead_paths(&paths);
+        assert_eq!(dead.len(), 2);
+        assert!(dead.contains(&1));
+        assert!(dead.contains(&3));
+    }
+
+    #[test]
+    fn test_path_status_is_problematic() {
+        assert!(PathStatus::Dead.is_problematic());
+        assert!(PathStatus::Duplicate.is_problematic());
+        assert!(PathStatus::DeadDuplicate.is_problematic());
+        assert!(!PathStatus::Valid.is_problematic());
+        assert!(!PathStatus::NonNormalized.is_problematic());
+    }
+
+    #[test]
+    fn test_path_status_description() {
+        assert_eq!(PathStatus::Valid.description(), "Valid");
+        assert_eq!(PathStatus::Dead.description(), "Dead (path does not exist)");
+        assert_eq!(PathStatus::Duplicate.description(), "Duplicate");
+        assert_eq!(PathStatus::NonNormalized.description(), "Can be normalized");
+        assert_eq!(PathStatus::DeadDuplicate.description(), "Dead & Duplicate");
+    }
+
+    #[test]
+    fn test_determine_status() {
+        // Valid path
+        let info = PathInfo {
+            original: "C:\\Windows".to_string(),
+            normalized: "C:\\Windows".to_string(),
+            status: PathStatus::Valid,
+            exists: true,
+            is_duplicate: false,
+            needs_normalization: false,
+        };
+        assert_eq!(determine_status(&info), PathStatus::Valid);
+
+        // Dead path
+        let info = PathInfo {
+            original: "C:\\NonExistent".to_string(),
+            normalized: "C:\\NonExistent".to_string(),
+            status: PathStatus::Valid,
+            exists: false,
+            is_duplicate: false,
+            needs_normalization: false,
+        };
+        assert_eq!(determine_status(&info), PathStatus::Dead);
+
+        // Duplicate path
+        let info = PathInfo {
+            original: "C:\\Windows".to_string(),
+            normalized: "C:\\Windows".to_string(),
+            status: PathStatus::Valid,
+            exists: true,
+            is_duplicate: true,
+            needs_normalization: false,
+        };
+        assert_eq!(determine_status(&info), PathStatus::Duplicate);
+
+        // Non-normalized path
+        let info = PathInfo {
+            original: "%SYSTEMROOT%".to_string(),
+            normalized: "C:\\Windows".to_string(),
+            status: PathStatus::Valid,
+            exists: true,
+            is_duplicate: false,
+            needs_normalization: true,
+        };
+        assert_eq!(determine_status(&info), PathStatus::NonNormalized);
+
+        // Dead duplicate
+        let info = PathInfo {
+            original: "C:\\NonExistent".to_string(),
+            normalized: "C:\\NonExistent".to_string(),
+            status: PathStatus::Valid,
+            exists: false,
+            is_duplicate: true,
+            needs_normalization: false,
+        };
+        assert_eq!(determine_status(&info), PathStatus::DeadDuplicate);
+    }
+
+    #[test]
+    fn test_empty_path_list() {
+        let info = analyze_paths(&[], &[]);
+        assert_eq!(info.len(), 0);
+    }
+
+    #[test]
+    fn test_multiple_duplicates() {
+        let paths = vec![
+            r"C:\Windows".to_string(),
+            r"C:\windows".to_string(),
+            r"C:\WINDOWS".to_string(),
+        ];
+
+        let info = analyze_paths(&paths, &[]);
+        assert_eq!(info.len(), 3);
+        // All three should be marked as duplicates
+        assert!(info.iter().all(|i| i.is_duplicate));
     }
 }

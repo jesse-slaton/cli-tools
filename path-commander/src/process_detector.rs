@@ -8,22 +8,22 @@ use windows::Win32::System::Diagnostics::ToolHelp::{
 /// List of known processes that don't respond to WM_SETTINGCHANGE
 /// These processes load environment variables at startup and don't refresh them
 const NON_RESPONSIVE_PROCESSES: &[&str] = &[
-    "cmd.exe",           // Command Prompt
-    "powershell.exe",    // Windows PowerShell
-    "pwsh.exe",          // PowerShell Core
+    "cmd.exe",             // Command Prompt
+    "powershell.exe",      // Windows PowerShell
+    "pwsh.exe",            // PowerShell Core
     "WindowsTerminal.exe", // Windows Terminal
-    "conhost.exe",       // Console Host
-    "bash.exe",          // Git Bash / MSYS2
-    "mintty.exe",        // MinTTY (MSYS2/Cygwin)
-    "Code.exe",          // VS Code
-    "devenv.exe",        // Visual Studio
-    "rider64.exe",       // JetBrains Rider
-    "idea64.exe",        // JetBrains IntelliJ
-    "pycharm64.exe",     // JetBrains PyCharm
-    "webstorm64.exe",    // JetBrains WebStorm
-    "sublime_text.exe",  // Sublime Text
-    "notepad++.exe",     // Notepad++
-    "atom.exe",          // Atom Editor
+    "conhost.exe",         // Console Host
+    "bash.exe",            // Git Bash / MSYS2
+    "mintty.exe",          // MinTTY (MSYS2/Cygwin)
+    "Code.exe",            // VS Code
+    "devenv.exe",          // Visual Studio
+    "rider64.exe",         // JetBrains Rider
+    "idea64.exe",          // JetBrains IntelliJ
+    "pycharm64.exe",       // JetBrains PyCharm
+    "webstorm64.exe",      // JetBrains WebStorm
+    "sublime_text.exe",    // Sublime Text
+    "notepad++.exe",       // Notepad++
+    "atom.exe",            // Atom Editor
 ];
 
 /// Detect which known non-responsive processes are currently running

@@ -1,11 +1,11 @@
 use anyhow::{anyhow, Result};
 use ratatui::style::Color;
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 
 /// Represents a color theme for Path Commander, compatible with Midnight Commander skins
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct Theme {
     /// Theme name
     pub name: String,
@@ -40,7 +40,9 @@ impl Theme {
     /// Load a theme from a Midnight Commander .ini skin file
     /// TODO: Implement full .ini parser for MC skin compatibility
     pub fn from_mc_skin(_path: &Path) -> Result<Self> {
-        Err(anyhow!("MC skin file loading not yet implemented. Use built-in themes: default, dracula"))
+        Err(anyhow!(
+            "MC skin file loading not yet implemented. Use built-in themes: default, dracula"
+        ))
     }
 
     /// Load a built-in theme by name
@@ -88,13 +90,13 @@ impl Theme {
             name: "dracula".to_string(),
             colors: HashMap::new(),
             panel_normal_fg: Color::Rgb(248, 248, 242), // Foreground
-            panel_normal_bg: Color::Rgb(40, 42, 54),     // Background
+            panel_normal_bg: Color::Rgb(40, 42, 54),    // Background
             panel_selected_fg: Color::Rgb(248, 248, 242),
-            panel_selected_bg: Color::Rgb(68, 71, 90),   // Current Line
-            panel_marked_fg: Color::Rgb(255, 121, 198),  // Pink
+            panel_selected_bg: Color::Rgb(68, 71, 90), // Current Line
+            panel_marked_fg: Color::Rgb(255, 121, 198), // Pink
             panel_marked_bg: Color::Rgb(40, 42, 54),
-            panel_border_fg: Color::Rgb(98, 114, 164),   // Comment
-            header_fg: Color::Rgb(139, 233, 253),        // Cyan
+            panel_border_fg: Color::Rgb(98, 114, 164), // Comment
+            header_fg: Color::Rgb(139, 233, 253),      // Cyan
             header_bg: Color::Rgb(40, 42, 54),
             status_fg: Color::Rgb(248, 248, 242),
             status_bg: Color::Rgb(68, 71, 90),
@@ -120,14 +122,27 @@ impl Default for Theme {
 }
 
 /// Parse MC color notation (e.g., "rgb524", "color0", "black")
+#[allow(dead_code)]
 fn parse_mc_color(s: &str) -> Result<Color> {
     let s = s.trim();
 
     // Handle rgb notation (rgb012 where each digit is 0-5)
     if s.starts_with("rgb") && s.len() == 6 {
-        let r = s.chars().nth(3).and_then(|c| c.to_digit(6)).ok_or_else(|| anyhow!("Invalid rgb"))?;
-        let g = s.chars().nth(4).and_then(|c| c.to_digit(6)).ok_or_else(|| anyhow!("Invalid rgb"))?;
-        let b = s.chars().nth(5).and_then(|c| c.to_digit(6)).ok_or_else(|| anyhow!("Invalid rgb"))?;
+        let r = s
+            .chars()
+            .nth(3)
+            .and_then(|c| c.to_digit(6))
+            .ok_or_else(|| anyhow!("Invalid rgb"))?;
+        let g = s
+            .chars()
+            .nth(4)
+            .and_then(|c| c.to_digit(6))
+            .ok_or_else(|| anyhow!("Invalid rgb"))?;
+        let b = s
+            .chars()
+            .nth(5)
+            .and_then(|c| c.to_digit(6))
+            .ok_or_else(|| anyhow!("Invalid rgb"))?;
 
         // Convert 0-5 range to 0-255
         let r = ((r * 255) / 5) as u8;
@@ -160,6 +175,7 @@ fn parse_mc_color(s: &str) -> Result<Color> {
 }
 
 /// Parse MC color pair (e.g., "rgb555;rgb435" or "white;blue")
+#[allow(dead_code)]
 fn parse_mc_color_pair(s: &str, color_map: &HashMap<String, Color>) -> Option<(Color, Color)> {
     let parts: Vec<&str> = s.split(';').collect();
     if parts.len() != 2 {

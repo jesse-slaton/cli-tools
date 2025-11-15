@@ -67,7 +67,12 @@ impl UI {
 
         let title = vec![
             Line::from(vec![
-                Span::styled("Path Commander", Style::default().fg(app.theme.header_fg).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Path Commander",
+                    Style::default()
+                        .fg(app.theme.header_fg)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw(" - Windows PATH Environment Manager"),
             ]),
             Line::from(vec![
@@ -102,7 +107,9 @@ impl UI {
                 Span::styled(
                     if app.has_changes { "MODIFIED" } else { "Clean" },
                     if app.has_changes {
-                        Style::default().fg(app.theme.path_duplicate_fg).add_modifier(Modifier::BOLD)
+                        Style::default()
+                            .fg(app.theme.path_duplicate_fg)
+                            .add_modifier(Modifier::BOLD)
                     } else {
                         Style::default().fg(app.theme.path_valid_fg)
                     },
@@ -140,8 +147,8 @@ impl UI {
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Min(0),      // List takes remaining space
-                Constraint::Length(1),   // Scrollbar takes 1 column
+                Constraint::Min(0),    // List takes remaining space
+                Constraint::Length(1), // Scrollbar takes 1 column
             ])
             .split(area);
 
@@ -156,7 +163,9 @@ impl UI {
         );
 
         let border_style = if is_active {
-            Style::default().fg(app.theme.panel_border_fg).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(app.theme.panel_border_fg)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::DarkGray)
         };
@@ -210,21 +219,26 @@ impl UI {
             .track_style(Style::default().fg(Color::DarkGray));
 
         // Clone state for rendering (render_stateful_widget needs &mut)
-        let mut scrollbar_state_mut = scrollbar_state.clone();
+        let mut scrollbar_state_mut = *scrollbar_state;
         f.render_stateful_widget(scrollbar, chunks[1], &mut scrollbar_state_mut);
     }
 
     fn render_status(&self, f: &mut Frame, area: Rect, app: &App) {
-        let status_text = vec![
-            Line::from(vec![
-                Span::styled(
-                    if app.is_admin { "ADMIN " } else { "USER " },
-                    Style::default().fg(if app.is_admin { app.theme.path_valid_fg } else { app.theme.path_duplicate_fg }),
-                ),
-                Span::raw("│ "),
-                Span::styled(&app.status_message, Style::default().fg(app.theme.status_fg)),
-            ]),
-        ];
+        let status_text = vec![Line::from(vec![
+            Span::styled(
+                if app.is_admin { "ADMIN " } else { "USER " },
+                Style::default().fg(if app.is_admin {
+                    app.theme.path_valid_fg
+                } else {
+                    app.theme.path_duplicate_fg
+                }),
+            ),
+            Span::raw("│ "),
+            Span::styled(
+                &app.status_message,
+                Style::default().fg(app.theme.status_fg),
+            ),
+        ])];
 
         let status = Paragraph::new(status_text)
             .block(Block::default().borders(Borders::ALL))
@@ -271,20 +285,31 @@ impl UI {
         let help_text = vec![
             Line::from(vec![Span::styled(
                 "Path Commander - Help",
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             )]),
             Line::from(""),
-            Line::from(vec![Span::styled("Navigation:", Style::default().add_modifier(Modifier::BOLD))]),
+            Line::from(vec![Span::styled(
+                "Navigation:",
+                Style::default().add_modifier(Modifier::BOLD),
+            )]),
             Line::from("  ↑/↓, j/k        Move selection up/down"),
             Line::from("  PgUp/PgDn       Move selection by 10"),
             Line::from("  Home/End        Move to first/last item"),
             Line::from("  Tab, ←/→        Switch between panels"),
             Line::from(""),
-            Line::from(vec![Span::styled("Selection:", Style::default().add_modifier(Modifier::BOLD))]),
+            Line::from(vec![Span::styled(
+                "Selection:",
+                Style::default().add_modifier(Modifier::BOLD),
+            )]),
             Line::from("  Space, Insert   Toggle mark on current item"),
             Line::from("  F2              Toggle mark (Midnight Commander style)"),
             Line::from(""),
-            Line::from(vec![Span::styled("Actions:", Style::default().add_modifier(Modifier::BOLD))]),
+            Line::from(vec![Span::styled(
+                "Actions:",
+                Style::default().add_modifier(Modifier::BOLD),
+            )]),
             Line::from("  F3, Delete      Delete marked items"),
             Line::from("  F4              Add new path"),
             Line::from("  F5              Move marked items to other panel"),
@@ -294,12 +319,18 @@ impl UI {
             Line::from("  F9              Normalize selected paths"),
             Line::from("  Enter           Edit current path"),
             Line::from(""),
-            Line::from(vec![Span::styled("Save/Restore:", Style::default().add_modifier(Modifier::BOLD))]),
+            Line::from(vec![Span::styled(
+                "Save/Restore:",
+                Style::default().add_modifier(Modifier::BOLD),
+            )]),
             Line::from("  Ctrl+S          Apply changes to registry"),
             Line::from("  Ctrl+B          Create backup"),
             Line::from("  Ctrl+R          Restore from backup"),
             Line::from(""),
-            Line::from(vec![Span::styled("Color Legend:", Style::default().add_modifier(Modifier::BOLD))]),
+            Line::from(vec![Span::styled(
+                "Color Legend:",
+                Style::default().add_modifier(Modifier::BOLD),
+            )]),
             Line::from(vec![
                 Span::raw("  "),
                 Span::styled("Red", Style::default().fg(Color::Red)),
@@ -345,12 +376,16 @@ impl UI {
         let mut lines = vec![
             Line::from(vec![Span::styled(
                 "PATH Changes Applied Successfully!",
-                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
             )]),
             Line::from(""),
             Line::from(vec![Span::styled(
                 "Important: Some running processes need to be restarted",
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
             )]),
             Line::from(""),
             Line::from("The following processes won't pick up the new PATH until restarted:"),
@@ -378,10 +413,15 @@ impl UI {
         ));
         lines.push(Line::from("the updated PATH."));
         lines.push(Line::from(""));
-        lines.push(Line::from(vec![Span::styled(
-            "Note: ",
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-        ), Span::raw("New processes started after this point will see the updated PATH.")]));
+        lines.push(Line::from(vec![
+            Span::styled(
+                "Note: ",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("New processes started after this point will see the updated PATH."),
+        ]));
         lines.push(Line::from(""));
         lines.push(Line::from(vec![Span::styled(
             "Press ENTER or ESC to continue",
@@ -431,7 +471,9 @@ impl UI {
             Line::from(""),
             Line::from(vec![Span::styled(
                 message,
-                Style::default().fg(app.theme.dialog_fg).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(app.theme.dialog_fg)
+                    .add_modifier(Modifier::BOLD),
             )]),
             Line::from(""),
             Line::from(vec![

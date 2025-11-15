@@ -1,5 +1,5 @@
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind, MouseButton};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{layout::Rect, widgets::ScrollbarState};
 use std::collections::HashSet;
 
@@ -84,7 +84,7 @@ pub struct App {
     pub viewport_height: u16,
     pub pending_directory: String, // Temporarily stores path for directory creation confirmation
     pub processes_to_restart: Vec<String>, // List of processes that need restarting to pick up PATH changes
-    pub theme: Theme, // Color theme for UI rendering
+    pub theme: Theme,                      // Color theme for UI rendering
 }
 
 impl App {
@@ -348,7 +348,12 @@ impl App {
                         if mouse.row >= hints_start {
                             self.handle_hints_click(mouse.column, terminal_size.width)?;
                         } else {
-                            self.handle_mouse_click(mouse.column, mouse.row, terminal_size, mouse.modifiers)?;
+                            self.handle_mouse_click(
+                                mouse.column,
+                                mouse.row,
+                                terminal_size,
+                                mouse.modifiers,
+                            )?;
                         }
                     }
                     _ => {}
@@ -372,7 +377,13 @@ impl App {
         Ok(())
     }
 
-    fn handle_mouse_click(&mut self, x: u16, y: u16, terminal_size: Rect, modifiers: KeyModifiers) -> Result<()> {
+    fn handle_mouse_click(
+        &mut self,
+        x: u16,
+        y: u16,
+        terminal_size: Rect,
+        modifiers: KeyModifiers,
+    ) -> Result<()> {
         // Calculate layout (same as ui.rs render_main)
         let header_height = 3;
         let status_height = 3;
@@ -410,8 +421,9 @@ impl App {
             // Clicked on scrollbar - jump to position
             let border_top: u16 = 1;
             let border_bottom: u16 = 1;
-            let content_height = (content_end - content_start) as u16;
-            let scrollbar_height = content_height.saturating_sub(border_top + border_bottom) as usize;
+            let content_height = content_end - content_start;
+            let scrollbar_height =
+                content_height.saturating_sub(border_top + border_bottom) as usize;
 
             if scrollbar_height > 0 {
                 let click_pos = relative_y.saturating_sub(border_top) as usize;
@@ -574,25 +586,31 @@ impl App {
         // "Q" (1) + " Quit" (5) = 93-99
 
         match relative_x {
-            0..=9 => self.mode = Mode::Help,                    // F1 Help
-            10..=19 => self.toggle_mark(),                      // F2 Mark
-            20..=28 => {                                        // F3 Del
+            0..=9 => self.mode = Mode::Help, // F1 Help
+            10..=19 => self.toggle_mark(),   // F2 Mark
+            20..=28 => {
+                // F3 Del
                 if self.has_marked_items() {
                     self.mode = Mode::Confirm(ConfirmAction::DeleteSelected);
                 }
             }
-            29..=37 => self.start_add_path(),                   // F4 Add
-            38..=47 => { let _ = self.move_marked_to_other_panel(); } // F5 Move
-            48..=62 => self.normalize_selected(),               // F9 Normalize
-            63..=76 => {                                        // Ctrl+S Save
+            29..=37 => self.start_add_path(), // F4 Add
+            38..=47 => {
+                let _ = self.move_marked_to_other_panel();
+            } // F5 Move
+            48..=62 => self.normalize_selected(), // F9 Normalize
+            63..=76 => {
+                // Ctrl+S Save
                 if self.has_changes {
                     self.mode = Mode::Confirm(ConfirmAction::ApplyChanges);
                 } else {
                     self.set_status("No changes to save");
                 }
             }
-            77..=92 => { let _ = self.create_backup(); }        // Ctrl+B Backup
-            93..=99 => self.confirm_exit(),                     // Q Quit
+            77..=92 => {
+                let _ = self.create_backup();
+            } // Ctrl+B Backup
+            93..=99 => self.confirm_exit(), // Q Quit
             _ => {}
         }
 
@@ -648,7 +666,9 @@ impl App {
                         ConfirmAction::ApplyChanges => self.apply_changes()?,
                         ConfirmAction::RestoreBackup => self.restore_selected_backup()?,
                         ConfirmAction::CreateSingleDirectory => self.create_single_directory()?,
-                        ConfirmAction::CreateMarkedDirectories => self.create_marked_directories()?,
+                        ConfirmAction::CreateMarkedDirectories => {
+                            self.create_marked_directories()?
+                        }
                     }
                 }
             } else if relative_x >= no_x.saturating_sub(2) && relative_x <= no_x + 2 {
@@ -668,7 +688,8 @@ impl App {
                     .max(0)
                     .min(self.machine_paths.len().saturating_sub(1) as i32);
                 self.machine_selected = new_pos as usize;
-                self.machine_scrollbar_state = self.machine_scrollbar_state.position(self.machine_selected);
+                self.machine_scrollbar_state =
+                    self.machine_scrollbar_state.position(self.machine_selected);
             }
             Panel::User => {
                 let new_pos = (self.user_selected as i32 + delta)
@@ -684,7 +705,8 @@ impl App {
         match self.active_panel {
             Panel::Machine => {
                 self.machine_selected = pos.min(self.machine_paths.len().saturating_sub(1));
-                self.machine_scrollbar_state = self.machine_scrollbar_state.position(self.machine_selected);
+                self.machine_scrollbar_state =
+                    self.machine_scrollbar_state.position(self.machine_selected);
             }
             Panel::User => {
                 self.user_selected = pos.min(self.user_paths.len().saturating_sub(1));
@@ -721,12 +743,14 @@ impl App {
     fn has_marked_dead_paths(&self) -> bool {
         // Check if any marked items in the active panel are dead paths
         match self.active_panel {
-            Panel::Machine => self.machine_marked.iter().any(|&idx| {
-                idx < self.machine_info.len() && !self.machine_info[idx].exists
-            }),
-            Panel::User => self.user_marked.iter().any(|&idx| {
-                idx < self.user_info.len() && !self.user_info[idx].exists
-            }),
+            Panel::Machine => self
+                .machine_marked
+                .iter()
+                .any(|&idx| idx < self.machine_info.len() && !self.machine_info[idx].exists),
+            Panel::User => self
+                .user_marked
+                .iter()
+                .any(|&idx| idx < self.user_info.len() && !self.user_info[idx].exists),
         }
     }
 
@@ -768,15 +792,13 @@ impl App {
         let machine_before = self.machine_paths.len();
         let user_before = self.user_paths.len();
 
-        self.machine_paths.retain(|p| {
-            crate::path_analyzer::path_exists(p)
-        });
-        self.user_paths.retain(|p| {
-            crate::path_analyzer::path_exists(p)
-        });
+        self.machine_paths
+            .retain(|p| crate::path_analyzer::path_exists(p));
+        self.user_paths
+            .retain(|p| crate::path_analyzer::path_exists(p));
 
-        let deleted = (machine_before - self.machine_paths.len())
-            + (user_before - self.user_paths.len());
+        let deleted =
+            (machine_before - self.machine_paths.len()) + (user_before - self.user_paths.len());
 
         self.reanalyze();
         self.has_changes = true;
@@ -899,7 +921,11 @@ impl App {
 
         self.reanalyze();
         self.has_changes = true;
-        self.set_status(&format!("Moved {} path(s) to {}", count, self.active_panel.toggle().scope().as_str()));
+        self.set_status(&format!(
+            "Moved {} path(s) to {}",
+            count,
+            self.active_panel.toggle().scope().as_str()
+        ));
         Ok(())
     }
 
@@ -907,7 +933,8 @@ impl App {
         match self.active_panel {
             Panel::Machine => {
                 if self.machine_selected > 0 {
-                    self.machine_paths.swap(self.machine_selected, self.machine_selected - 1);
+                    self.machine_paths
+                        .swap(self.machine_selected, self.machine_selected - 1);
                     self.machine_selected -= 1;
                     self.has_changes = true;
                     self.reanalyze();
@@ -915,7 +942,8 @@ impl App {
             }
             Panel::User => {
                 if self.user_selected > 0 {
-                    self.user_paths.swap(self.user_selected, self.user_selected - 1);
+                    self.user_paths
+                        .swap(self.user_selected, self.user_selected - 1);
                     self.user_selected -= 1;
                     self.has_changes = true;
                     self.reanalyze();
@@ -1087,7 +1115,10 @@ impl App {
             }
             Err(e) => {
                 // Process detection failed, but changes were still applied successfully
-                self.set_status(&format!("Changes applied! (Process detection failed: {})", e));
+                self.set_status(&format!(
+                    "Changes applied! (Process detection failed: {})",
+                    e
+                ));
             }
         }
 
@@ -1173,7 +1204,10 @@ impl App {
 
                 self.reanalyze();
                 self.has_changes = true;
-                self.set_status(&format!("Created directory and added: {}", self.pending_directory));
+                self.set_status(&format!(
+                    "Created directory and added: {}",
+                    self.pending_directory
+                ));
                 self.pending_directory.clear();
                 Ok(())
             }
@@ -1264,15 +1298,18 @@ impl App {
         self.machine_info = analyze_paths(&self.machine_paths, &self.user_paths);
 
         // Update scrollbar content lengths
-        self.machine_scrollbar_state = self.machine_scrollbar_state
+        self.machine_scrollbar_state = self
+            .machine_scrollbar_state
             .content_length(self.machine_paths.len());
-        self.user_scrollbar_state = self.user_scrollbar_state
+        self.user_scrollbar_state = self
+            .user_scrollbar_state
             .content_length(self.user_paths.len());
 
         // Adjust selection if out of bounds
         if self.machine_selected >= self.machine_paths.len() && !self.machine_paths.is_empty() {
             self.machine_selected = self.machine_paths.len() - 1;
-            self.machine_scrollbar_state = self.machine_scrollbar_state.position(self.machine_selected);
+            self.machine_scrollbar_state =
+                self.machine_scrollbar_state.position(self.machine_selected);
         }
         if self.user_selected >= self.user_paths.len() && !self.user_paths.is_empty() {
             self.user_selected = self.user_paths.len() - 1;
@@ -1291,8 +1328,16 @@ impl App {
         let machine_duplicates = self.machine_info.iter().filter(|i| i.is_duplicate).count();
         let user_duplicates = self.user_info.iter().filter(|i| i.is_duplicate).count();
 
-        let machine_non_normalized = self.machine_info.iter().filter(|i| i.needs_normalization).count();
-        let user_non_normalized = self.user_info.iter().filter(|i| i.needs_normalization).count();
+        let machine_non_normalized = self
+            .machine_info
+            .iter()
+            .filter(|i| i.needs_normalization)
+            .count();
+        let user_non_normalized = self
+            .user_info
+            .iter()
+            .filter(|i| i.needs_normalization)
+            .count();
 
         Statistics {
             machine_total: self.machine_paths.len(),
@@ -1307,6 +1352,7 @@ impl App {
     }
 }
 
+#[allow(dead_code)]
 pub struct Statistics {
     pub machine_total: usize,
     pub user_total: usize,
@@ -1316,4 +1362,426 @@ pub struct Statistics {
     pub user_duplicates: usize,
     pub machine_non_normalized: usize,
     pub user_non_normalized: usize,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Helper function to create a test App without registry access
+    fn create_test_app(machine_paths: Vec<String>, user_paths: Vec<String>) -> App {
+        let machine_info = analyze_paths(&machine_paths, &user_paths);
+        let user_info = analyze_paths(&user_paths, &machine_paths);
+
+        App {
+            machine_paths: machine_paths.clone(),
+            user_paths: user_paths.clone(),
+            machine_info,
+            user_info,
+            machine_original: machine_paths,
+            user_original: user_paths,
+            active_panel: Panel::User,
+            machine_selected: 0,
+            user_selected: 0,
+            machine_marked: HashSet::new(),
+            user_marked: HashSet::new(),
+            mode: Mode::Normal,
+            is_admin: false,
+            has_changes: false,
+            status_message: String::new(),
+            input_buffer: String::new(),
+            backup_list: Vec::new(),
+            backup_selected: 0,
+            machine_scrollbar_state: ScrollbarState::default(),
+            user_scrollbar_state: ScrollbarState::default(),
+            should_exit: false,
+            viewport_height: 20,
+            pending_directory: String::new(),
+            processes_to_restart: Vec::new(),
+            theme: Theme::default(),
+        }
+    }
+
+    #[test]
+    fn test_panel_toggle() {
+        assert_eq!(Panel::User.toggle(), Panel::Machine);
+        assert_eq!(Panel::Machine.toggle(), Panel::User);
+    }
+
+    #[test]
+    fn test_panel_scope() {
+        assert_eq!(Panel::User.scope(), PathScope::User);
+        assert_eq!(Panel::Machine.scope(), PathScope::Machine);
+    }
+
+    #[test]
+    fn test_app_initial_state() {
+        let app = create_test_app(
+            vec![r"C:\Windows".to_string()],
+            vec![r"C:\Users\Test".to_string()],
+        );
+
+        assert_eq!(app.machine_paths.len(), 1);
+        assert_eq!(app.user_paths.len(), 1);
+        assert_eq!(app.active_panel, Panel::User);
+        assert_eq!(app.machine_selected, 0);
+        assert_eq!(app.user_selected, 0);
+        assert!(!app.has_changes);
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[test]
+    fn test_move_selection_down() {
+        let mut app = create_test_app(
+            vec![],
+            vec![
+                r"C:\Path1".to_string(),
+                r"C:\Path2".to_string(),
+                r"C:\Path3".to_string(),
+            ],
+        );
+
+        assert_eq!(app.user_selected, 0);
+
+        app.move_selection(1);
+        assert_eq!(app.user_selected, 1);
+
+        app.move_selection(1);
+        assert_eq!(app.user_selected, 2);
+
+        // Should not go beyond last item
+        app.move_selection(1);
+        assert_eq!(app.user_selected, 2);
+    }
+
+    #[test]
+    fn test_move_selection_up() {
+        let mut app = create_test_app(
+            vec![],
+            vec![
+                r"C:\Path1".to_string(),
+                r"C:\Path2".to_string(),
+                r"C:\Path3".to_string(),
+            ],
+        );
+
+        app.user_selected = 2;
+
+        app.move_selection(-1);
+        assert_eq!(app.user_selected, 1);
+
+        app.move_selection(-1);
+        assert_eq!(app.user_selected, 0);
+
+        // Should not go below 0
+        app.move_selection(-1);
+        assert_eq!(app.user_selected, 0);
+    }
+
+    #[test]
+    fn test_move_selection_to() {
+        let mut app = create_test_app(
+            vec![],
+            vec![
+                r"C:\Path1".to_string(),
+                r"C:\Path2".to_string(),
+                r"C:\Path3".to_string(),
+            ],
+        );
+
+        app.move_selection_to(2);
+        assert_eq!(app.user_selected, 2);
+
+        app.move_selection_to(0);
+        assert_eq!(app.user_selected, 0);
+    }
+
+    #[test]
+    fn test_toggle_mark() {
+        let mut app = create_test_app(
+            vec![],
+            vec![
+                r"C:\Path1".to_string(),
+                r"C:\Path2".to_string(),
+                r"C:\Path3".to_string(),
+            ],
+        );
+
+        // Mark first item (toggle_mark also moves selection down)
+        app.user_selected = 0;
+        app.toggle_mark();
+        assert!(app.user_marked.contains(&0));
+        assert_eq!(app.user_selected, 1); // Selection moved down
+
+        // Go back and unmark first item
+        app.user_selected = 0;
+        app.toggle_mark();
+        assert!(!app.user_marked.contains(&0));
+
+        // Test on machine panel
+        app.active_panel = Panel::Machine;
+        app.machine_paths = vec![r"C:\Windows".to_string(), r"C:\Temp".to_string()];
+        app.machine_selected = 0;
+        app.toggle_mark();
+        assert!(app.machine_marked.contains(&0));
+        assert_eq!(app.machine_selected, 1); // Selection moved down
+    }
+
+    #[test]
+    fn test_has_marked_items() {
+        let mut app = create_test_app(
+            vec![r"C:\Windows".to_string()],
+            vec![r"C:\Path1".to_string()],
+        );
+
+        assert!(!app.has_marked_items());
+
+        app.user_marked.insert(0);
+        assert!(app.has_marked_items());
+
+        app.user_marked.clear();
+        app.active_panel = Panel::Machine;
+        app.machine_marked.insert(0);
+        assert!(app.has_marked_items());
+    }
+
+    #[test]
+    fn test_has_marked_dead_paths() {
+        let mut app = create_test_app(
+            vec![],
+            vec![
+                r"C:\Windows".to_string(),
+                r"C:\NonExistentPath123456".to_string(),
+            ],
+        );
+        app.reanalyze();
+
+        // No marked items yet
+        assert!(!app.has_marked_dead_paths());
+
+        // Mark a valid path
+        app.user_marked.insert(0);
+        assert!(!app.has_marked_dead_paths());
+
+        // Mark a dead path
+        app.user_marked.insert(1);
+        assert!(app.has_marked_dead_paths());
+    }
+
+    #[test]
+    fn test_mode_transitions() {
+        let mut app = create_test_app(vec![], vec![]);
+
+        assert_eq!(app.mode, Mode::Normal);
+
+        app.mode = Mode::Help;
+        assert_eq!(app.mode, Mode::Help);
+
+        app.mode = Mode::Confirm(ConfirmAction::Exit);
+        assert_eq!(app.mode, Mode::Confirm(ConfirmAction::Exit));
+
+        app.mode = Mode::Input(InputMode::AddPath);
+        assert_eq!(app.mode, Mode::Input(InputMode::AddPath));
+
+        app.mode = Mode::BackupList;
+        assert_eq!(app.mode, Mode::BackupList);
+    }
+
+    #[test]
+    fn test_can_create_directory() {
+        // Valid paths
+        assert!(App::can_create_directory(r"C:\NewFolder"));
+        assert!(App::can_create_directory(r"C:\Path\To\NewFolder"));
+
+        // Network paths should not be creatable
+        assert!(!App::can_create_directory(r"\\server\share\folder"));
+
+        // Paths with invalid characters
+        assert!(!App::can_create_directory(r"C:\Invalid|Path"));
+        assert!(!App::can_create_directory(r"C:\Invalid<Path"));
+        assert!(!App::can_create_directory(r"C:\Invalid>Path"));
+    }
+
+    #[test]
+    fn test_get_statistics() {
+        let app = create_test_app(
+            vec![r"C:\Windows".to_string(), r"C:\NonExistent1".to_string()],
+            vec![
+                r"C:\Users".to_string(),
+                r"C:\windows".to_string(), // Duplicate of machine path
+                r"C:\NonExistent2".to_string(),
+            ],
+        );
+
+        let stats = app.get_statistics();
+
+        assert_eq!(stats.machine_total, 2);
+        assert_eq!(stats.user_total, 3);
+        assert_eq!(stats.machine_dead, 1); // C:\NonExistent1
+        assert_eq!(stats.user_dead, 1); // C:\NonExistent2
+                                        // Duplicates: C:\windows is duplicate of C:\Windows
+        assert!(stats.machine_duplicates > 0 || stats.user_duplicates > 0);
+    }
+
+    #[test]
+    fn test_confirm_exit() {
+        let mut app = create_test_app(vec![], vec![]);
+
+        // When there are no changes, should exit directly
+        app.confirm_exit();
+        assert!(app.should_exit);
+
+        // When there are changes, should confirm first
+        let mut app = create_test_app(vec![], vec![]);
+        app.has_changes = true;
+        app.confirm_exit();
+        assert_eq!(app.mode, Mode::Confirm(ConfirmAction::Exit));
+    }
+
+    #[test]
+    fn test_delete_marked() {
+        let mut app = create_test_app(
+            vec![],
+            vec![
+                r"C:\Path1".to_string(),
+                r"C:\Path2".to_string(),
+                r"C:\Path3".to_string(),
+            ],
+        );
+
+        // Mark items 0 and 2
+        app.user_marked.insert(0);
+        app.user_marked.insert(2);
+
+        let result = app.delete_marked();
+        assert!(result.is_ok());
+
+        // Should have 1 path remaining (the middle one)
+        assert_eq!(app.user_paths.len(), 1);
+        assert_eq!(app.user_paths[0], r"C:\Path2");
+
+        // Marked set should be cleared
+        assert!(app.user_marked.is_empty());
+
+        // Should have changes
+        assert!(app.has_changes);
+    }
+
+    #[test]
+    fn test_normalize_selected() {
+        let mut app = create_test_app(vec![], vec![r"%SYSTEMROOT%".to_string()]);
+        app.reanalyze();
+
+        app.user_selected = 0;
+        // normalize_selected works on marked paths, so mark it first
+        app.user_marked.insert(0);
+        app.normalize_selected();
+
+        // Path should be normalized (no % signs)
+        assert!(!app.user_paths[0].contains('%'));
+        assert!(app.has_changes);
+    }
+
+    #[test]
+    fn test_start_add_path() {
+        let mut app = create_test_app(vec![], vec![]);
+
+        app.start_add_path();
+
+        assert_eq!(app.mode, Mode::Input(InputMode::AddPath));
+        assert_eq!(app.input_buffer, "");
+    }
+
+    #[test]
+    fn test_start_edit_path() {
+        let mut app = create_test_app(vec![], vec![r"C:\ExistingPath".to_string()]);
+
+        app.user_selected = 0;
+        app.start_edit_path();
+
+        assert_eq!(app.mode, Mode::Input(InputMode::EditPath));
+        assert_eq!(app.input_buffer, r"C:\ExistingPath");
+    }
+
+    #[test]
+    fn test_update_viewport_height() {
+        let mut app = create_test_app(vec![], vec![]);
+
+        // Viewport height = terminal_height - 10 (for UI elements)
+        app.update_viewport_height(30);
+        assert_eq!(app.viewport_height, 20); // 30 - 10
+
+        app.update_viewport_height(50);
+        assert_eq!(app.viewport_height, 40); // 50 - 10
+    }
+
+    #[test]
+    fn test_reanalyze_adjusts_selection() {
+        let mut app = create_test_app(
+            vec![],
+            vec![r"C:\Path1".to_string(), r"C:\Path2".to_string()],
+        );
+
+        // Select the last item
+        app.user_selected = 1;
+
+        // Remove the last path and reanalyze
+        app.user_paths.pop();
+        app.reanalyze();
+
+        // Selection should be adjusted to 0 (last valid index)
+        assert_eq!(app.user_selected, 0);
+    }
+
+    #[test]
+    fn test_empty_paths() {
+        let app = create_test_app(vec![], vec![]);
+
+        assert_eq!(app.machine_paths.len(), 0);
+        assert_eq!(app.user_paths.len(), 0);
+
+        let stats = app.get_statistics();
+        assert_eq!(stats.machine_total, 0);
+        assert_eq!(stats.user_total, 0);
+    }
+
+    #[test]
+    fn test_panel_switching() {
+        let mut app = create_test_app(
+            vec![r"C:\Machine".to_string()],
+            vec![r"C:\User".to_string()],
+        );
+
+        assert_eq!(app.active_panel, Panel::User);
+
+        app.active_panel = app.active_panel.toggle();
+        assert_eq!(app.active_panel, Panel::Machine);
+
+        app.active_panel = app.active_panel.toggle();
+        assert_eq!(app.active_panel, Panel::User);
+    }
+
+    #[test]
+    fn test_marked_items_on_both_panels() {
+        let mut app = create_test_app(
+            vec![r"C:\Machine1".to_string(), r"C:\Machine2".to_string()],
+            vec![r"C:\User1".to_string(), r"C:\User2".to_string()],
+        );
+
+        // Mark items on user panel
+        app.active_panel = Panel::User;
+        app.user_marked.insert(0);
+        app.user_marked.insert(1);
+
+        // Mark items on machine panel
+        app.active_panel = Panel::Machine;
+        app.machine_marked.insert(0);
+
+        // Check both panels have marked items
+        app.active_panel = Panel::User;
+        assert!(app.has_marked_items());
+
+        app.active_panel = Panel::Machine;
+        assert!(app.has_marked_items());
+    }
 }

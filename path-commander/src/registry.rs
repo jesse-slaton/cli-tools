@@ -10,7 +10,8 @@ use windows::Win32::System::Registry::{
 };
 
 const ENVIRONMENT_KEY: &str = "Environment";
-const SYSTEM_ENVIRONMENT_KEY: &str = "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment";
+const SYSTEM_ENVIRONMENT_KEY: &str =
+    "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment";
 const PATH_VALUE: &str = "Path";
 
 /// Represents whether we're working with USER or MACHINE (SYSTEM) paths
@@ -140,10 +141,8 @@ pub fn write_path(scope: PathScope, value: &str) -> Result<()> {
         let value_name_wide = to_wide_string(PATH_VALUE);
 
         // Convert wide string to byte slice for the new API
-        let value_bytes = std::slice::from_raw_parts(
-            value_wide.as_ptr() as *const u8,
-            value_wide.len() * 2,
-        );
+        let value_bytes =
+            std::slice::from_raw_parts(value_wide.as_ptr() as *const u8, value_wide.len() * 2);
 
         // Write the value
         let result = RegSetValueExW(

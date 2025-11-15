@@ -142,9 +142,21 @@ When you press `Ctrl+S`:
 1. A backup is automatically created
 2. Changes are written to the Windows Registry
 3. A `WM_SETTINGCHANGE` message is broadcast to notify other applications
-4. The status bar confirms success
+4. Path Commander detects running processes that won't pick up the changes
+5. If any non-responsive processes are found, a notification dialog is shown
+6. The status bar confirms success
 
-**Note**: Some applications may need to be restarted to pick up PATH changes.
+### Process Restart Notifications
+
+After applying changes, Path Commander automatically detects running processes that don't respond to environment variable updates. If any are found, you'll see a dialog listing:
+
+- **Terminals**: cmd.exe, powershell.exe, pwsh.exe, bash.exe, Windows Terminal
+- **Editors**: VS Code, Visual Studio, JetBrains IDEs, Sublime Text, Notepad++
+- **Other**: Console Host, MinTTY, Atom
+
+These processes load environment variables at startup and must be restarted to see the new PATH.
+
+**Note**: New processes started after saving will automatically see the updated PATH.
 
 ## Examples
 
@@ -241,6 +253,10 @@ Jesse Slaton (github@doxazo.net)
 ## Contributing
 
 Contributions are welcome! Please feel free to submit issues or pull requests.
+
+For developers:
+- See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines
+- See [TESTING.md](TESTING.md) for information about the test suite
 
 ## Roadmap
 
