@@ -444,45 +444,121 @@ impl UI {
     }
 
     fn render_confirm(&self, f: &mut Frame, app: &App, action: ConfirmAction) {
-        let message = match action {
+        // Build the message lines based on action
+        let mut message_lines = vec![Line::from("")]; // Start with blank line
+
+        match action {
             ConfirmAction::Exit => {
                 if app.has_changes {
-                    "You have unsaved changes. Exit anyway?"
+                    message_lines.push(Line::from(vec![Span::styled(
+                        "You have unsaved changes. Exit anyway?",
+                        Style::default()
+                            .fg(app.theme.dialog_fg)
+                            .add_modifier(Modifier::BOLD),
+                    )]));
                 } else {
-                    "Exit Path Commander?"
+                    message_lines.push(Line::from(vec![Span::styled(
+                        "Exit Path Commander?",
+                        Style::default()
+                            .fg(app.theme.dialog_fg)
+                            .add_modifier(Modifier::BOLD),
+                    )]));
                 }
             }
-            ConfirmAction::DeleteSelected => "Delete selected paths?",
-            ConfirmAction::DeleteAllDead => "Delete all dead paths?",
-            ConfirmAction::DeleteAllDuplicates => "Delete all duplicate paths?",
-            ConfirmAction::ApplyChanges => {
-                "Apply changes to Windows Registry?\n\nThis will modify your PATH environment variables."
+            ConfirmAction::DeleteSelected => {
+                message_lines.push(Line::from(vec![Span::styled(
+                    "Delete selected paths?",
+                    Style::default()
+                        .fg(app.theme.dialog_fg)
+                        .add_modifier(Modifier::BOLD),
+                )]));
             }
-            ConfirmAction::RestoreBackup => "Restore from selected backup?",
+            ConfirmAction::DeleteAllDead => {
+                message_lines.push(Line::from(vec![Span::styled(
+                    "Delete all dead paths?",
+                    Style::default()
+                        .fg(app.theme.dialog_fg)
+                        .add_modifier(Modifier::BOLD),
+                )]));
+            }
+            ConfirmAction::DeleteAllDuplicates => {
+                message_lines.push(Line::from(vec![Span::styled(
+                    "Delete all duplicate paths?",
+                    Style::default()
+                        .fg(app.theme.dialog_fg)
+                        .add_modifier(Modifier::BOLD),
+                )]));
+            }
+            ConfirmAction::ApplyChanges => {
+                message_lines.push(Line::from(vec![Span::styled(
+                    "Apply changes to PATH?",
+                    Style::default()
+                        .fg(app.theme.dialog_fg)
+                        .add_modifier(Modifier::BOLD),
+                )]));
+                message_lines.push(Line::from(""));
+                // Show which scopes will be modified
+                let mut scopes = Vec::new();
+                if app.user_paths != app.user_original {
+                    scopes.push("USER");
+                }
+                if app.machine_paths != app.machine_original {
+                    scopes.push("MACHINE");
+                }
+                let scope_text = if scopes.is_empty() {
+                    "No changes detected".to_string()
+                } else {
+                    format!("This will modify: {}", scopes.join(" and "))
+                };
+                message_lines.push(Line::from(vec![Span::styled(
+                    scope_text,
+                    Style::default().fg(Color::Yellow),
+                )]));
+            }
+            ConfirmAction::RestoreBackup => {
+                message_lines.push(Line::from(vec![Span::styled(
+                    "Restore from selected backup?",
+                    Style::default()
+                        .fg(app.theme.dialog_fg)
+                        .add_modifier(Modifier::BOLD),
+                )]));
+            }
             ConfirmAction::CreateSingleDirectory => {
-                "Directory does not exist.\n\nCreate directory and add to PATH?"
+                message_lines.push(Line::from(vec![Span::styled(
+                    "Directory does not exist.",
+                    Style::default()
+                        .fg(app.theme.dialog_fg)
+                        .add_modifier(Modifier::BOLD),
+                )]));
+                message_lines.push(Line::from(""));
+                message_lines.push(Line::from(vec![Span::raw(
+                    "Create directory and add to PATH?",
+                )]));
             }
             ConfirmAction::CreateMarkedDirectories => {
-                "Create all marked dead directories?\n\n(Network paths and invalid paths will be skipped)"
+                message_lines.push(Line::from(vec![Span::styled(
+                    "Create all marked dead directories?",
+                    Style::default()
+                        .fg(app.theme.dialog_fg)
+                        .add_modifier(Modifier::BOLD),
+                )]));
+                message_lines.push(Line::from(""));
+                message_lines.push(Line::from(vec![Span::styled(
+                    "(Network paths and invalid paths will be skipped)",
+                    Style::default().fg(Color::Gray),
+                )]));
             }
-        };
+        }
 
-        let text = vec![
-            Line::from(""),
-            Line::from(vec![Span::styled(
-                message,
-                Style::default()
-                    .fg(app.theme.dialog_fg)
-                    .add_modifier(Modifier::BOLD),
-            )]),
-            Line::from(""),
-            Line::from(vec![
-                Span::styled("Y", Style::default().fg(app.theme.button_focused_bg)),
-                Span::raw("es / "),
-                Span::styled("N", Style::default().fg(app.theme.error_fg)),
-                Span::raw("o"),
-            ]),
-        ];
+        message_lines.push(Line::from(""));
+        message_lines.push(Line::from(vec![
+            Span::styled("Y", Style::default().fg(app.theme.button_focused_bg)),
+            Span::raw("es / "),
+            Span::styled("N", Style::default().fg(app.theme.error_fg)),
+            Span::raw("o"),
+        ]));
+
+        let text = message_lines;
 
         let dialog = Paragraph::new(text)
             .block(

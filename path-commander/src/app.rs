@@ -1130,12 +1130,16 @@ impl App {
 
         // Detect running processes that won't pick up the new PATH
         match crate::process_detector::detect_running_processes() {
-            Ok(processes) if !processes.is_empty() => {
-                self.processes_to_restart = processes;
-                self.mode = Mode::ProcessRestartInfo;
-            }
-            Ok(_) => {
-                self.set_status("Changes applied successfully!");
+            Ok(processes) => {
+                if !processes.is_empty() {
+                    self.processes_to_restart = processes;
+                    self.mode = Mode::ProcessRestartInfo;
+                } else {
+                    // No non-responsive processes detected
+                    self.set_status(
+                        "Changes applied! All running processes should pick up the new PATH.",
+                    );
+                }
             }
             Err(e) => {
                 // Process detection failed, but changes were still applied successfully
