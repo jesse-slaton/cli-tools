@@ -295,26 +295,70 @@ impl UI {
 
     fn render_key_hints(&self, f: &mut Frame, area: Rect, app: &App) {
         let hints = match app.mode {
-            Mode::Normal => vec![
-                Span::styled("F1", Style::default().fg(app.theme.header_fg)),
-                Span::raw(" Help │ "),
-                Span::styled("F2", Style::default().fg(app.theme.header_fg)),
-                Span::raw(" Mark │ "),
-                Span::styled("F3", Style::default().fg(app.theme.header_fg)),
-                Span::raw(" Del │ "),
-                Span::styled("F4", Style::default().fg(app.theme.header_fg)),
-                Span::raw(" Add │ "),
-                Span::styled("F5", Style::default().fg(app.theme.header_fg)),
-                Span::raw(" Move │ "),
-                Span::styled("Enter", Style::default().fg(app.theme.header_fg)),
-                Span::raw(" Edit │ "),
-                Span::styled("F9", Style::default().fg(app.theme.header_fg)),
-                Span::raw(" Normalize │ "),
-                Span::styled("Ctrl+S", Style::default().fg(app.theme.header_fg)),
-                Span::raw(" Save │ "),
-                Span::styled("Q", Style::default().fg(app.theme.header_fg)),
-                Span::raw(" Quit"),
-            ],
+            Mode::Normal => {
+                use crate::app::FilterMode;
+
+                // Count total marked items across both panels
+                let total_marked = app.machine_marked.len() + app.user_marked.len();
+                let filter_active = app.filter_mode != FilterMode::None;
+
+                // Context-sensitive hints based on application state
+                if filter_active {
+                    // When filter is active - show filter-related operations
+                    vec![
+                        Span::styled("F1", Style::default().fg(app.theme.header_fg)),
+                        Span::raw(" Help │ "),
+                        Span::styled("/", Style::default().fg(app.theme.header_fg)),
+                        Span::raw(" Clear Filter │ "),
+                        Span::styled("Ctrl+A", Style::default().fg(app.theme.header_fg)),
+                        Span::raw(" Mark All │ "),
+                        Span::styled("F3", Style::default().fg(app.theme.header_fg)),
+                        Span::raw(" Del │ "),
+                        Span::styled("Ctrl+S", Style::default().fg(app.theme.header_fg)),
+                        Span::raw(" Save │ "),
+                        Span::styled("Q", Style::default().fg(app.theme.header_fg)),
+                        Span::raw(" Quit"),
+                    ]
+                } else if total_marked > 0 {
+                    // When items are marked - show bulk operations
+                    vec![
+                        Span::styled("F1", Style::default().fg(app.theme.header_fg)),
+                        Span::raw(" Help │ "),
+                        Span::styled("F3", Style::default().fg(app.theme.header_fg)),
+                        Span::raw(" Delete │ "),
+                        Span::styled("F5", Style::default().fg(app.theme.header_fg)),
+                        Span::raw(" Move │ "),
+                        Span::styled("F9", Style::default().fg(app.theme.header_fg)),
+                        Span::raw(" Normalize │ "),
+                        Span::styled("Ctrl+Shift+U", Style::default().fg(app.theme.header_fg)),
+                        Span::raw(" Unmark All │ "),
+                        Span::styled("Ctrl+S", Style::default().fg(app.theme.header_fg)),
+                        Span::raw(" Save │ "),
+                        Span::styled("Q", Style::default().fg(app.theme.header_fg)),
+                        Span::raw(" Quit"),
+                    ]
+                } else {
+                    // Normal mode - default hints with more discoverable features
+                    vec![
+                        Span::styled("F1", Style::default().fg(app.theme.header_fg)),
+                        Span::raw(" Help │ "),
+                        Span::styled("F2", Style::default().fg(app.theme.header_fg)),
+                        Span::raw(" Mark │ "),
+                        Span::styled("F3", Style::default().fg(app.theme.header_fg)),
+                        Span::raw(" Del │ "),
+                        Span::styled("F4", Style::default().fg(app.theme.header_fg)),
+                        Span::raw(" Add │ "),
+                        Span::styled("/", Style::default().fg(app.theme.header_fg)),
+                        Span::raw(" Filter │ "),
+                        Span::styled("Ctrl+A", Style::default().fg(app.theme.header_fg)),
+                        Span::raw(" Mark All │ "),
+                        Span::styled("Ctrl+S", Style::default().fg(app.theme.header_fg)),
+                        Span::raw(" Save │ "),
+                        Span::styled("Q", Style::default().fg(app.theme.header_fg)),
+                        Span::raw(" Quit"),
+                    ]
+                }
+            }
             _ => vec![
                 Span::styled("ESC", Style::default().fg(app.theme.header_fg)),
                 Span::raw(" Cancel"),
