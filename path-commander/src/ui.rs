@@ -65,6 +65,68 @@ impl UI {
     fn render_header(&self, f: &mut Frame, area: Rect, app: &App) {
         let stats = app.get_statistics();
 
+        // Build filter status text
+        let mut second_line_spans = vec![
+            Span::raw("Total: "),
+            Span::styled(
+                format!("M:{} ", stats.machine_total),
+                Style::default().fg(app.theme.panel_normal_fg),
+            ),
+            Span::styled(
+                format!("U:{} ", stats.user_total),
+                Style::default().fg(app.theme.panel_normal_fg),
+            ),
+            Span::raw("│ Dead: "),
+            Span::styled(
+                format!("M:{} ", stats.machine_dead),
+                Style::default().fg(app.theme.path_dead_fg),
+            ),
+            Span::styled(
+                format!("U:{} ", stats.user_dead),
+                Style::default().fg(app.theme.path_dead_fg),
+            ),
+            Span::raw("│ Duplicates: "),
+            Span::styled(
+                format!("M:{} ", stats.machine_duplicates),
+                Style::default().fg(app.theme.path_duplicate_fg),
+            ),
+            Span::styled(
+                format!("U:{}", stats.user_duplicates),
+                Style::default().fg(app.theme.path_duplicate_fg),
+            ),
+        ];
+
+        // Add filter status if active
+        use crate::app::FilterMode;
+        if app.filter_mode != FilterMode::None {
+            let filter_text = match app.filter_mode {
+                FilterMode::Dead => "Dead",
+                FilterMode::Duplicates => "Duplicates",
+                FilterMode::NonNormalized => "Non-normalized",
+                FilterMode::Valid => "Valid",
+                FilterMode::None => "",
+            };
+            second_line_spans.push(Span::raw(" │ Filter: "));
+            second_line_spans.push(Span::styled(
+                filter_text,
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        }
+
+        second_line_spans.push(Span::raw(" │ "));
+        second_line_spans.push(Span::styled(
+            if app.has_changes { "MODIFIED" } else { "Clean" },
+            if app.has_changes {
+                Style::default()
+                    .fg(app.theme.path_duplicate_fg)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(app.theme.path_valid_fg)
+            },
+        ));
+
         let title = vec![
             Line::from(vec![
                 Span::styled(
@@ -75,46 +137,7 @@ impl UI {
                 ),
                 Span::raw(" - Windows PATH Environment Manager"),
             ]),
-            Line::from(vec![
-                Span::raw("Total: "),
-                Span::styled(
-                    format!("M:{} ", stats.machine_total),
-                    Style::default().fg(app.theme.panel_normal_fg),
-                ),
-                Span::styled(
-                    format!("U:{} ", stats.user_total),
-                    Style::default().fg(app.theme.panel_normal_fg),
-                ),
-                Span::raw("│ Dead: "),
-                Span::styled(
-                    format!("M:{} ", stats.machine_dead),
-                    Style::default().fg(app.theme.path_dead_fg),
-                ),
-                Span::styled(
-                    format!("U:{} ", stats.user_dead),
-                    Style::default().fg(app.theme.path_dead_fg),
-                ),
-                Span::raw("│ Duplicates: "),
-                Span::styled(
-                    format!("M:{} ", stats.machine_duplicates),
-                    Style::default().fg(app.theme.path_duplicate_fg),
-                ),
-                Span::styled(
-                    format!("U:{}", stats.user_duplicates),
-                    Style::default().fg(app.theme.path_duplicate_fg),
-                ),
-                Span::raw(" │ "),
-                Span::styled(
-                    if app.has_changes { "MODIFIED" } else { "Clean" },
-                    if app.has_changes {
-                        Style::default()
-                            .fg(app.theme.path_duplicate_fg)
-                            .add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default().fg(app.theme.path_valid_fg)
-                    },
-                ),
-            ]),
+            Line::from(second_line_spans),
         ];
 
         let header = Paragraph::new(title)
@@ -143,6 +166,9 @@ impl UI {
             ),
         };
 
+        // Get filtered indices
+        let filtered_indices = app.get_filtered_indices(info);
+
         // Split area: List (left) and Scrollbar (right 1 column)
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
@@ -153,12 +179,17 @@ impl UI {
             .split(area);
 
         let title = format!(
-            " {} {} ",
+            " {} {} {}",
             panel.scope().as_str(),
             if !app.is_admin && panel == Panel::Machine {
                 "[READ-ONLY]"
             } else {
                 ""
+            },
+            if !filtered_indices.is_empty() && filtered_indices.len() != paths.len() {
+                format!("[{}/{}]", filtered_indices.len(), paths.len())
+            } else {
+                String::new()
             }
         );
 
@@ -175,13 +206,14 @@ impl UI {
             .borders(Borders::ALL)
             .border_style(border_style);
 
-        let items: Vec<ListItem> = paths
+        // Only show filtered paths
+        let items: Vec<ListItem> = filtered_indices
             .iter()
-            .enumerate()
-            .map(|(idx, path)| {
+            .map(|&idx| {
                 let is_selected = idx == selected && is_active;
                 let is_marked = marked.contains(&idx);
 
+                let path = &paths[idx];
                 let status = info.get(idx).map(|i| i.status).unwrap_or(PathStatus::Valid);
                 let color = self.get_status_color(status, &app.theme);
 
@@ -224,7 +256,7 @@ impl UI {
     }
 
     fn render_status(&self, f: &mut Frame, area: Rect, app: &App) {
-        let status_text = vec![Line::from(vec![
+        let mut status_spans = vec![
             Span::styled(
                 if app.is_admin { "ADMIN " } else { "USER " },
                 Style::default().fg(if app.is_admin {
@@ -234,11 +266,24 @@ impl UI {
                 }),
             ),
             Span::raw("│ "),
-            Span::styled(
-                &app.status_message,
-                Style::default().fg(app.theme.status_fg),
-            ),
-        ])];
+        ];
+
+        // Add marked items count if any are marked
+        let total_marked = app.machine_marked.len() + app.user_marked.len();
+        if total_marked > 0 {
+            status_spans.push(Span::styled(
+                format!("{} marked", total_marked),
+                Style::default().fg(Color::Yellow),
+            ));
+            status_spans.push(Span::raw(" │ "));
+        }
+
+        status_spans.push(Span::styled(
+            &app.status_message,
+            Style::default().fg(app.theme.status_fg),
+        ));
+
+        let status_text = vec![Line::from(status_spans)];
 
         let status = Paragraph::new(status_text)
             .block(Block::default().borders(Borders::ALL))
@@ -305,6 +350,21 @@ impl UI {
             )]),
             Line::from("  Space, Insert   Toggle mark on current item"),
             Line::from("  F2              Toggle mark (Midnight Commander style)"),
+            Line::from("  Ctrl+A          Mark all visible paths in current scope"),
+            Line::from("  Ctrl+Shift+A    Mark all paths in both scopes"),
+            Line::from("  Ctrl+D          Mark all duplicates in current scope"),
+            Line::from("  Ctrl+Shift+D    Mark all dead paths in current scope"),
+            Line::from("  Ctrl+N          Mark all non-normalized paths"),
+            Line::from("  Ctrl+Shift+U    Unmark all"),
+            Line::from(""),
+            Line::from(vec![Span::styled(
+                "Filtering:",
+                Style::default().add_modifier(Modifier::BOLD),
+            )]),
+            Line::from("  F11             Toggle filter: Dead paths"),
+            Line::from("  F12             Toggle filter: Duplicates"),
+            Line::from("  Shift+F11       Toggle filter: Non-normalized"),
+            Line::from("  Ctrl+F11        Toggle filter: Valid paths only"),
             Line::from(""),
             Line::from(vec![Span::styled(
                 "Actions:",
@@ -317,6 +377,7 @@ impl UI {
             Line::from("  F7              Remove all duplicates"),
             Line::from("  F8              Remove all dead paths"),
             Line::from("  F9              Normalize selected paths"),
+            Line::from("  F10             Create marked dead directories"),
             Line::from("  Enter           Edit current path"),
             Line::from(""),
             Line::from(vec![Span::styled(

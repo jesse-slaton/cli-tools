@@ -59,6 +59,15 @@ pub enum InputMode {
     EditPath,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FilterMode {
+    None,
+    Dead,
+    Duplicates,
+    NonNormalized,
+    Valid,
+}
+
 pub struct App {
     pub machine_paths: Vec<String>,
     pub user_paths: Vec<String>,
@@ -85,6 +94,7 @@ pub struct App {
     pub pending_directory: String, // Temporarily stores path for directory creation confirmation
     pub processes_to_restart: Vec<String>, // List of processes that need restarting to pick up PATH changes
     pub theme: Theme,                      // Color theme for UI rendering
+    pub filter_mode: FilterMode,           // Current filter mode (None, Dead, Duplicates, etc.)
     last_click_time: std::time::Instant,   // Time of last mouse click for double-click detection
     last_click_pos: (Panel, usize),        // Panel and row of last click
 }
@@ -130,6 +140,7 @@ impl App {
             pending_directory: String::new(),
             processes_to_restart: Vec::new(),
             theme,
+            filter_mode: FilterMode::None,
             last_click_time: std::time::Instant::now(),
             last_click_pos: (Panel::Machine, 0),
         })
@@ -196,13 +207,29 @@ impl App {
                 self.mode = Mode::Confirm(ConfirmAction::DeleteAllDead);
             }
             (KeyCode::F(9), _) => self.normalize_selected(),
-            (KeyCode::F(11), _) => {
-                // Create marked dead directories
+            (KeyCode::F(10), _) => {
+                // Create marked dead directories (moved from F11)
                 if self.has_marked_dead_paths() {
                     self.mode = Mode::Confirm(ConfirmAction::CreateMarkedDirectories);
                 } else {
                     self.set_status("No marked dead paths to create");
                 }
+            }
+            (KeyCode::F(11), KeyModifiers::SHIFT) => {
+                // Toggle Non-normalized filter
+                self.toggle_filter(FilterMode::NonNormalized);
+            }
+            (KeyCode::F(11), KeyModifiers::CONTROL) => {
+                // Toggle Valid filter
+                self.toggle_filter(FilterMode::Valid);
+            }
+            (KeyCode::F(11), _) => {
+                // Toggle Dead paths filter
+                self.toggle_filter(FilterMode::Dead);
+            }
+            (KeyCode::F(12), _) => {
+                // Toggle Duplicates filter
+                self.toggle_filter(FilterMode::Duplicates);
             }
             (KeyCode::F(1), _) | (KeyCode::Char('?'), _) => {
                 self.mode = Mode::Help;
@@ -235,6 +262,31 @@ impl App {
             }
             (KeyCode::Char('b'), KeyModifiers::CONTROL) => self.create_backup()?,
             (KeyCode::Char('r'), KeyModifiers::CONTROL) => self.show_backup_list()?,
+
+            // Bulk selection commands
+            (KeyCode::Char('A'), KeyModifiers::CONTROL) => {
+                // Shift+Ctrl+A (uppercase A means shift is pressed)
+                self.mark_all_both_scopes();
+            }
+            (KeyCode::Char('a'), KeyModifiers::CONTROL) => {
+                // Ctrl+A only
+                self.mark_all_visible();
+            }
+            (KeyCode::Char('D'), KeyModifiers::CONTROL) => {
+                // Shift+Ctrl+D (uppercase D means shift is pressed)
+                self.mark_all_dead();
+            }
+            (KeyCode::Char('d'), KeyModifiers::CONTROL) => {
+                // Ctrl+D only
+                self.mark_all_duplicates();
+            }
+            (KeyCode::Char('n'), KeyModifiers::CONTROL) => {
+                self.mark_all_non_normalized();
+            }
+            (KeyCode::Char('U'), KeyModifiers::CONTROL) => {
+                // Shift+Ctrl+U (uppercase U means shift is pressed)
+                self.unmark_all();
+            }
 
             _ => {}
         }
@@ -1349,6 +1401,168 @@ impl App {
         self.status_message = message.to_string();
     }
 
+    // Filtering functions
+    fn toggle_filter(&mut self, mode: FilterMode) {
+        if self.filter_mode == mode {
+            // Toggle off - clear filter
+            self.filter_mode = FilterMode::None;
+            self.set_status("Filter cleared");
+        } else {
+            // Toggle on - set new filter
+            self.filter_mode = mode;
+            let filter_name = match mode {
+                FilterMode::Dead => "Dead paths",
+                FilterMode::Duplicates => "Duplicates",
+                FilterMode::NonNormalized => "Non-normalized",
+                FilterMode::Valid => "Valid paths",
+                FilterMode::None => "None",
+            };
+            self.set_status(&format!("Filter: {}", filter_name));
+        }
+    }
+
+    // Bulk selection functions
+    fn mark_all_visible(&mut self) {
+        let count = match self.active_panel {
+            Panel::Machine => {
+                let filtered = self.get_filtered_indices(&self.machine_info);
+                for idx in filtered {
+                    self.machine_marked.insert(idx);
+                }
+                self.machine_marked.len()
+            }
+            Panel::User => {
+                let filtered = self.get_filtered_indices(&self.user_info);
+                for idx in filtered {
+                    self.user_marked.insert(idx);
+                }
+                self.user_marked.len()
+            }
+        };
+        self.set_status(&format!(
+            "Marked {} visible paths in {} scope",
+            count,
+            self.active_panel.scope().as_str()
+        ));
+    }
+
+    fn mark_all_both_scopes(&mut self) {
+        let machine_filtered = self.get_filtered_indices(&self.machine_info);
+        for idx in machine_filtered {
+            self.machine_marked.insert(idx);
+        }
+        let user_filtered = self.get_filtered_indices(&self.user_info);
+        for idx in user_filtered {
+            self.user_marked.insert(idx);
+        }
+        let total = self.machine_marked.len() + self.user_marked.len();
+        self.set_status(&format!("Marked {} paths in both scopes", total));
+    }
+
+    fn mark_all_duplicates(&mut self) {
+        let count = match self.active_panel {
+            Panel::Machine => {
+                for (idx, info) in self.machine_info.iter().enumerate() {
+                    if info.is_duplicate {
+                        self.machine_marked.insert(idx);
+                    }
+                }
+                self.machine_marked.len()
+            }
+            Panel::User => {
+                for (idx, info) in self.user_info.iter().enumerate() {
+                    if info.is_duplicate {
+                        self.user_marked.insert(idx);
+                    }
+                }
+                self.user_marked.len()
+            }
+        };
+        self.set_status(&format!("Marked {} duplicate paths", count));
+    }
+
+    fn mark_all_dead(&mut self) {
+        let count = match self.active_panel {
+            Panel::Machine => {
+                for (idx, info) in self.machine_info.iter().enumerate() {
+                    if !info.exists {
+                        self.machine_marked.insert(idx);
+                    }
+                }
+                self.machine_marked.len()
+            }
+            Panel::User => {
+                for (idx, info) in self.user_info.iter().enumerate() {
+                    if !info.exists {
+                        self.user_marked.insert(idx);
+                    }
+                }
+                self.user_marked.len()
+            }
+        };
+        self.set_status(&format!("Marked {} dead paths", count));
+    }
+
+    fn mark_all_non_normalized(&mut self) {
+        let count = match self.active_panel {
+            Panel::Machine => {
+                for (idx, info) in self.machine_info.iter().enumerate() {
+                    if info.needs_normalization {
+                        self.machine_marked.insert(idx);
+                    }
+                }
+                self.machine_marked.len()
+            }
+            Panel::User => {
+                for (idx, info) in self.user_info.iter().enumerate() {
+                    if info.needs_normalization {
+                        self.user_marked.insert(idx);
+                    }
+                }
+                self.user_marked.len()
+            }
+        };
+        self.set_status(&format!("Marked {} non-normalized paths", count));
+    }
+
+    fn unmark_all(&mut self) {
+        let total = self.machine_marked.len() + self.user_marked.len();
+        self.machine_marked.clear();
+        self.user_marked.clear();
+        self.set_status(&format!("Unmarked {} paths", total));
+    }
+
+    /// Get filtered indices based on current filter mode
+    pub fn get_filtered_indices(&self, info: &[PathInfo]) -> Vec<usize> {
+        match self.filter_mode {
+            FilterMode::None => (0..info.len()).collect(),
+            FilterMode::Dead => info
+                .iter()
+                .enumerate()
+                .filter(|(_, i)| !i.exists)
+                .map(|(idx, _)| idx)
+                .collect(),
+            FilterMode::Duplicates => info
+                .iter()
+                .enumerate()
+                .filter(|(_, i)| i.is_duplicate)
+                .map(|(idx, _)| idx)
+                .collect(),
+            FilterMode::NonNormalized => info
+                .iter()
+                .enumerate()
+                .filter(|(_, i)| i.needs_normalization)
+                .map(|(idx, _)| idx)
+                .collect(),
+            FilterMode::Valid => info
+                .iter()
+                .enumerate()
+                .filter(|(_, i)| i.exists && !i.is_duplicate && !i.needs_normalization)
+                .map(|(idx, _)| idx)
+                .collect(),
+        }
+    }
+
     pub fn get_statistics(&self) -> Statistics {
         let machine_dead = self.machine_info.iter().filter(|i| !i.exists).count();
         let user_dead = self.user_info.iter().filter(|i| !i.exists).count();
@@ -1427,6 +1641,7 @@ mod tests {
             pending_directory: String::new(),
             processes_to_restart: Vec::new(),
             theme: Theme::default(),
+            filter_mode: FilterMode::None,
             last_click_time: std::time::Instant::now(),
             last_click_pos: (Panel::Machine, 0),
         }
