@@ -498,8 +498,8 @@ impl App {
     fn handle_hints_click(&mut self, x: u16, width: u16) -> Result<()> {
         // Key hints are centered, so calculate the starting position
         // Hint text: "F1 Help │ F2 Mark │ F3 Del │ F4 Add │ F5 Move │ F9 Normalize │ Ctrl+S Save │ Ctrl+B Backup │ Q Quit"
-        // Approximate positions (these are rough estimates for center-aligned text)
-        let hint_text_len = 92; // Approximate total length
+        // Total length: 100 characters
+        let hint_text_len = 100;
         let start_x = (width.saturating_sub(hint_text_len)) / 2;
 
         // Calculate relative position
@@ -509,16 +509,16 @@ impl App {
 
         let relative_x = x - start_x;
 
-        // Map click positions to keys (approximate character positions)
-        // F1: 0-2, Help: 3-7, │: 8, space: 9
-        // F2: 10-12, Mark: 13-17, │: 18, space: 19
-        // F3: 20-22, Del: 23-26, │: 27, space: 28
-        // F4: 29-31, Add: 32-35, │: 36, space: 37
-        // F5: 38-40, Move: 41-45, │: 46, space: 47
-        // F9: 48-50, Normalize: 51-61, │: 62, space: 63
-        // Ctrl+S: 64-70, Save: 71-75, │: 76, space: 77
-        // Ctrl+B: 78-84, Backup: 85-91, │: 92, space: 93
-        // Q: 94-95, Quit: 96-100
+        // Map click positions to keys (exact character positions):
+        // "F1" (2) + " Help │ " (8) = 0-9
+        // "F2" (2) + " Mark │ " (8) = 10-19
+        // "F3" (2) + " Del │ " (7) = 20-28
+        // "F4" (2) + " Add │ " (7) = 29-37
+        // "F5" (2) + " Move │ " (8) = 38-47
+        // "F9" (2) + " Normalize │ " (13) = 48-62
+        // "Ctrl+S" (6) + " Save │ " (8) = 63-76
+        // "Ctrl+B" (6) + " Backup │ " (10) = 77-92
+        // "Q" (1) + " Quit" (5) = 93-99
 
         match relative_x {
             0..=9 => self.mode = Mode::Help,                    // F1 Help
@@ -530,16 +530,16 @@ impl App {
             }
             29..=37 => self.start_add_path(),                   // F4 Add
             38..=47 => { let _ = self.move_marked_to_other_panel(); } // F5 Move
-            48..=63 => self.normalize_selected(),               // F9 Normalize
-            64..=77 => {                                        // Ctrl+S Save
+            48..=62 => self.normalize_selected(),               // F9 Normalize
+            63..=76 => {                                        // Ctrl+S Save
                 if self.has_changes {
                     self.mode = Mode::Confirm(ConfirmAction::ApplyChanges);
                 } else {
                     self.set_status("No changes to save");
                 }
             }
-            78..=93 => { let _ = self.create_backup(); }        // Ctrl+B Backup
-            94..=100 => { let _ = self.confirm_exit(); }        // Q Quit
+            77..=92 => { let _ = self.create_backup(); }        // Ctrl+B Backup
+            93..=99 => { let _ = self.confirm_exit(); }         // Q Quit
             _ => {}
         }
 

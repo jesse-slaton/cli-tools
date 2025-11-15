@@ -111,13 +111,23 @@ fn run_app<B: ratatui::backend::Backend>(
                     match (key.code, key.modifiers) {
                         (KeyCode::Char('c'), KeyModifiers::CONTROL) => break,
                         (KeyCode::Char('q'), KeyModifiers::NONE) => {
-                            if app.confirm_exit() {
-                                break;
+                            // Only handle 'q' in Normal mode, otherwise let app handle it
+                            if matches!(app.mode, app::Mode::Normal) {
+                                if app.confirm_exit() {
+                                    break;
+                                }
+                            } else {
+                                app.handle_input(key)?;
                             }
                         }
                         (KeyCode::F(10), _) | (KeyCode::Esc, _) => {
-                            if app.confirm_exit() {
-                                break;
+                            // Only handle ESC/F10 as quit in Normal mode
+                            if matches!(app.mode, app::Mode::Normal) {
+                                if app.confirm_exit() {
+                                    break;
+                                }
+                            } else {
+                                app.handle_input(key)?;
                             }
                         }
                         _ => {
