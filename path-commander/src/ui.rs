@@ -18,7 +18,7 @@ impl UI {
 
     pub fn render(&self, f: &mut Frame, app: &App) {
         match app.mode {
-            Mode::Help => self.render_help(f),
+            Mode::Help => self.render_help(f, app),
             Mode::Confirm(action) => self.render_confirm(f, app, action),
             Mode::BackupList => self.render_backup_list(f, app),
             Mode::ProcessRestartInfo => self.render_process_restart_info(f, app),
@@ -67,44 +67,44 @@ impl UI {
 
         let title = vec![
             Line::from(vec![
-                Span::styled("Path Commander", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled("Path Commander", Style::default().fg(app.theme.header_fg).add_modifier(Modifier::BOLD)),
                 Span::raw(" - Windows PATH Environment Manager"),
             ]),
             Line::from(vec![
                 Span::raw("Total: "),
                 Span::styled(
                     format!("M:{} ", stats.machine_total),
-                    Style::default().fg(Color::White),
+                    Style::default().fg(app.theme.panel_normal_fg),
                 ),
                 Span::styled(
                     format!("U:{} ", stats.user_total),
-                    Style::default().fg(Color::White),
+                    Style::default().fg(app.theme.panel_normal_fg),
                 ),
                 Span::raw("│ Dead: "),
                 Span::styled(
                     format!("M:{} ", stats.machine_dead),
-                    Style::default().fg(Color::Red),
+                    Style::default().fg(app.theme.path_dead_fg),
                 ),
                 Span::styled(
                     format!("U:{} ", stats.user_dead),
-                    Style::default().fg(Color::Red),
+                    Style::default().fg(app.theme.path_dead_fg),
                 ),
                 Span::raw("│ Duplicates: "),
                 Span::styled(
                     format!("M:{} ", stats.machine_duplicates),
-                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(app.theme.path_duplicate_fg),
                 ),
                 Span::styled(
                     format!("U:{}", stats.user_duplicates),
-                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(app.theme.path_duplicate_fg),
                 ),
                 Span::raw(" │ "),
                 Span::styled(
                     if app.has_changes { "MODIFIED" } else { "Clean" },
                     if app.has_changes {
-                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                        Style::default().fg(app.theme.path_duplicate_fg).add_modifier(Modifier::BOLD)
                     } else {
-                        Style::default().fg(Color::Green)
+                        Style::default().fg(app.theme.path_valid_fg)
                     },
                 ),
             ]),
@@ -156,9 +156,9 @@ impl UI {
         );
 
         let border_style = if is_active {
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+            Style::default().fg(app.theme.panel_border_fg).add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(Color::Gray)
+            Style::default().fg(Color::DarkGray)
         };
 
         let block = Block::default()
@@ -174,7 +174,7 @@ impl UI {
                 let is_marked = marked.contains(&idx);
 
                 let status = info.get(idx).map(|i| i.status).unwrap_or(PathStatus::Valid);
-                let color = self.get_status_color(status);
+                let color = self.get_status_color(status, &app.theme);
 
                 let checkbox = if is_marked { "[X] " } else { "[ ] " };
                 let display = format!("{}{}", checkbox, path);
@@ -203,7 +203,7 @@ impl UI {
             .track_symbol(Some("│"))
             .thumb_symbol("█")
             .thumb_style(if is_active {
-                Style::default().fg(Color::Cyan)
+                Style::default().fg(app.theme.panel_border_fg)
             } else {
                 Style::default().fg(Color::Gray)
             })
@@ -219,10 +219,10 @@ impl UI {
             Line::from(vec![
                 Span::styled(
                     if app.is_admin { "ADMIN " } else { "USER " },
-                    Style::default().fg(if app.is_admin { Color::Green } else { Color::Yellow }),
+                    Style::default().fg(if app.is_admin { app.theme.path_valid_fg } else { app.theme.path_duplicate_fg }),
                 ),
                 Span::raw("│ "),
-                Span::raw(&app.status_message),
+                Span::styled(&app.status_message, Style::default().fg(app.theme.status_fg)),
             ]),
         ];
 
@@ -236,27 +236,27 @@ impl UI {
     fn render_key_hints(&self, f: &mut Frame, area: Rect, app: &App) {
         let hints = match app.mode {
             Mode::Normal => vec![
-                Span::styled("F1", Style::default().fg(Color::Cyan)),
+                Span::styled("F1", Style::default().fg(app.theme.header_fg)),
                 Span::raw(" Help │ "),
-                Span::styled("F2", Style::default().fg(Color::Cyan)),
+                Span::styled("F2", Style::default().fg(app.theme.header_fg)),
                 Span::raw(" Mark │ "),
-                Span::styled("F3", Style::default().fg(Color::Cyan)),
+                Span::styled("F3", Style::default().fg(app.theme.header_fg)),
                 Span::raw(" Del │ "),
-                Span::styled("F4", Style::default().fg(Color::Cyan)),
+                Span::styled("F4", Style::default().fg(app.theme.header_fg)),
                 Span::raw(" Add │ "),
-                Span::styled("F5", Style::default().fg(Color::Cyan)),
+                Span::styled("F5", Style::default().fg(app.theme.header_fg)),
                 Span::raw(" Move │ "),
-                Span::styled("F9", Style::default().fg(Color::Cyan)),
+                Span::styled("F9", Style::default().fg(app.theme.header_fg)),
                 Span::raw(" Normalize │ "),
-                Span::styled("Ctrl+S", Style::default().fg(Color::Cyan)),
+                Span::styled("Ctrl+S", Style::default().fg(app.theme.header_fg)),
                 Span::raw(" Save │ "),
-                Span::styled("Ctrl+B", Style::default().fg(Color::Cyan)),
+                Span::styled("Ctrl+B", Style::default().fg(app.theme.header_fg)),
                 Span::raw(" Backup │ "),
-                Span::styled("Q", Style::default().fg(Color::Cyan)),
+                Span::styled("Q", Style::default().fg(app.theme.header_fg)),
                 Span::raw(" Quit"),
             ],
             _ => vec![
-                Span::styled("ESC", Style::default().fg(Color::Cyan)),
+                Span::styled("ESC", Style::default().fg(app.theme.header_fg)),
                 Span::raw(" Cancel"),
             ],
         };
@@ -267,7 +267,7 @@ impl UI {
         f.render_widget(paragraph, area);
     }
 
-    fn render_help(&self, f: &mut Frame) {
+    fn render_help(&self, f: &mut Frame, app: &App) {
         let help_text = vec![
             Line::from(vec![Span::styled(
                 "Path Commander - Help",
@@ -331,7 +331,7 @@ impl UI {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Cyan)),
+                    .border_style(Style::default().fg(app.theme.dialog_border_fg)),
             )
             .alignment(Alignment::Left)
             .wrap(Wrap { trim: false });
@@ -392,7 +392,7 @@ impl UI {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Yellow))
+                    .border_style(Style::default().fg(app.theme.dialog_border_fg))
                     .title(" Process Restart Required "),
             )
             .alignment(Alignment::Left)
@@ -431,13 +431,13 @@ impl UI {
             Line::from(""),
             Line::from(vec![Span::styled(
                 message,
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                Style::default().fg(app.theme.dialog_fg).add_modifier(Modifier::BOLD),
             )]),
             Line::from(""),
             Line::from(vec![
-                Span::styled("Y", Style::default().fg(Color::Green)),
+                Span::styled("Y", Style::default().fg(app.theme.button_focused_bg)),
                 Span::raw("es / "),
-                Span::styled("N", Style::default().fg(Color::Red)),
+                Span::styled("N", Style::default().fg(app.theme.error_fg)),
                 Span::raw("o"),
             ]),
         ];
@@ -447,7 +447,7 @@ impl UI {
                 Block::default()
                     .title(" Confirm ")
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Yellow)),
+                    .border_style(Style::default().fg(app.theme.dialog_border_fg)),
             )
             .alignment(Alignment::Center);
 
@@ -477,7 +477,7 @@ impl UI {
                 Block::default()
                     .title(title)
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Cyan)),
+                    .border_style(Style::default().fg(app.theme.dialog_border_fg)),
             )
             .alignment(Alignment::Left);
 
@@ -525,13 +525,13 @@ impl UI {
         f.render_widget(list, area);
     }
 
-    fn get_status_color(&self, status: PathStatus) -> Color {
+    fn get_status_color(&self, status: PathStatus, theme: &crate::theme::Theme) -> Color {
         match status {
-            PathStatus::Valid => Color::Green,
-            PathStatus::Dead => Color::Red,
-            PathStatus::Duplicate => Color::Yellow,
-            PathStatus::NonNormalized => Color::Cyan,
-            PathStatus::DeadDuplicate => Color::Red,
+            PathStatus::Valid => theme.path_valid_fg,
+            PathStatus::Dead => theme.path_dead_fg,
+            PathStatus::Duplicate => theme.path_duplicate_fg,
+            PathStatus::NonNormalized => theme.path_nonnormalized_fg,
+            PathStatus::DeadDuplicate => theme.path_dead_fg,
         }
     }
 }
