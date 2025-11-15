@@ -77,6 +77,7 @@ pub struct App {
     pub machine_scrollbar_state: ScrollbarState,
     pub user_scrollbar_state: ScrollbarState,
     pub should_exit: bool,
+    pub viewport_height: u16,
 }
 
 impl App {
@@ -116,7 +117,17 @@ impl App {
             backup_list: Vec::new(),
             backup_selected: 0,
             should_exit: false,
+            viewport_height: 10, // Default, will be updated based on terminal size
         })
+    }
+
+    /// Update viewport height based on terminal size
+    /// Calculates visible lines in panel: terminal_height - header(3) - status(3) - hints(2) - borders(2)
+    pub fn update_viewport_height(&mut self, terminal_height: u16) {
+        // Layout: Header(3) + Content + Status(3) + Hints(2)
+        // Panel has top and bottom borders (2)
+        // Viewport = terminal_height - 3 - 3 - 2 - 2 = terminal_height - 10
+        self.viewport_height = terminal_height.saturating_sub(10).max(1);
     }
 
     pub fn handle_input(&mut self, key: KeyEvent) -> Result<()> {
@@ -134,8 +145,16 @@ impl App {
             // Navigation
             (KeyCode::Up, _) | (KeyCode::Char('k'), _) => self.move_selection(-1),
             (KeyCode::Down, _) | (KeyCode::Char('j'), _) => self.move_selection(1),
-            (KeyCode::PageUp, _) => self.move_selection(-10),
-            (KeyCode::PageDown, _) => self.move_selection(10),
+            (KeyCode::PageUp, _) => {
+                // Jump by viewport height minus 1 for context (like vim Ctrl+B)
+                let jump = (self.viewport_height.saturating_sub(1).max(1)) as i32;
+                self.move_selection(-jump)
+            }
+            (KeyCode::PageDown, _) => {
+                // Jump by viewport height minus 1 for context (like vim Ctrl+F)
+                let jump = (self.viewport_height.saturating_sub(1).max(1)) as i32;
+                self.move_selection(jump)
+            }
             (KeyCode::Home, _) => self.move_selection_to(0),
             (KeyCode::End, _) => self.move_selection_to(usize::MAX),
             (KeyCode::Tab, _) | (KeyCode::Left, _) | (KeyCode::Right, _) => {

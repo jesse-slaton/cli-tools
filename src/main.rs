@@ -97,6 +97,10 @@ fn run_app<B: ratatui::backend::Backend>(
             break;
         }
 
+        // Update viewport height for PGUP/PGDOWN navigation
+        let terminal_height = terminal.size()?.height;
+        app.update_viewport_height(terminal_height);
+
         match event::read()? {
             Event::Key(key) => {
                 let now = std::time::Instant::now();
