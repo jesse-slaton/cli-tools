@@ -39,6 +39,7 @@ pub enum Mode {
     Input(InputMode),
     BackupList,
     ProcessRestartInfo,
+    FilterMenu,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,6 +96,7 @@ pub struct App {
     pub processes_to_restart: Vec<String>, // List of processes that need restarting to pick up PATH changes
     pub theme: Theme,                      // Color theme for UI rendering
     pub filter_mode: FilterMode,           // Current filter mode (None, Dead, Duplicates, etc.)
+    pub filter_menu_selected: usize,       // Selected item in filter menu (0-4)
     last_click_time: std::time::Instant,   // Time of last mouse click for double-click detection
     last_click_pos: (Panel, usize),        // Panel and row of last click
 }
@@ -141,6 +143,7 @@ impl App {
             processes_to_restart: Vec::new(),
             theme,
             filter_mode: FilterMode::None,
+            filter_menu_selected: 0,
             last_click_time: std::time::Instant::now(),
             last_click_pos: (Panel::Machine, 0),
         })
@@ -163,6 +166,7 @@ impl App {
             Mode::Input(input_mode) => self.handle_input_mode(key, input_mode),
             Mode::BackupList => self.handle_backup_list_input(key),
             Mode::ProcessRestartInfo => self.handle_process_restart_info_input(key),
+            Mode::FilterMenu => self.handle_filter_menu_input(key),
         }
     }
 
@@ -208,28 +212,17 @@ impl App {
             }
             (KeyCode::F(9), _) => self.normalize_selected(),
             (KeyCode::F(10), _) => {
-                // Create marked dead directories (moved from F11)
+                // Create marked dead directories
                 if self.has_marked_dead_paths() {
                     self.mode = Mode::Confirm(ConfirmAction::CreateMarkedDirectories);
                 } else {
                     self.set_status("No marked dead paths to create");
                 }
             }
-            (KeyCode::F(11), KeyModifiers::SHIFT) => {
-                // Toggle Non-normalized filter
-                self.toggle_filter(FilterMode::NonNormalized);
-            }
-            (KeyCode::F(11), KeyModifiers::CONTROL) => {
-                // Toggle Valid filter
-                self.toggle_filter(FilterMode::Valid);
-            }
-            (KeyCode::F(11), _) => {
-                // Toggle Dead paths filter
-                self.toggle_filter(FilterMode::Dead);
-            }
-            (KeyCode::F(12), _) => {
-                // Toggle Duplicates filter
-                self.toggle_filter(FilterMode::Duplicates);
+            (KeyCode::Char('/'), _) => {
+                // Open filter menu
+                self.mode = Mode::FilterMenu;
+                self.filter_menu_selected = 0;
             }
             (KeyCode::F(1), _) | (KeyCode::Char('?'), _) => {
                 self.mode = Mode::Help;
@@ -382,6 +375,51 @@ impl App {
                 }
             }
             KeyCode::Esc | KeyCode::Char('q') => {
+                self.mode = Mode::Normal;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn handle_filter_menu_input(&mut self, key: KeyEvent) -> Result<()> {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.filter_menu_selected > 0 {
+                    self.filter_menu_selected -= 1;
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                // We have 5 filter options (0-4): None, Dead, Duplicates, NonNormalized, Valid
+                if self.filter_menu_selected < 4 {
+                    self.filter_menu_selected += 1;
+                }
+            }
+            KeyCode::Enter => {
+                // Apply selected filter
+                let new_filter = match self.filter_menu_selected {
+                    0 => FilterMode::None,
+                    1 => FilterMode::Dead,
+                    2 => FilterMode::Duplicates,
+                    3 => FilterMode::NonNormalized,
+                    4 => FilterMode::Valid,
+                    _ => FilterMode::None,
+                };
+
+                // Set the filter mode directly (don't toggle)
+                self.filter_mode = new_filter;
+                let filter_name = match new_filter {
+                    FilterMode::None => "None (showing all)",
+                    FilterMode::Dead => "Dead paths",
+                    FilterMode::Duplicates => "Duplicates",
+                    FilterMode::NonNormalized => "Non-normalized",
+                    FilterMode::Valid => "Valid paths",
+                };
+                self.set_status(&format!("Filter: {}", filter_name));
+                self.mode = Mode::Normal;
+            }
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('/') => {
+                // Close menu without changing filter
                 self.mode = Mode::Normal;
             }
             _ => {}
@@ -1401,26 +1439,6 @@ impl App {
         self.status_message = message.to_string();
     }
 
-    // Filtering functions
-    fn toggle_filter(&mut self, mode: FilterMode) {
-        if self.filter_mode == mode {
-            // Toggle off - clear filter
-            self.filter_mode = FilterMode::None;
-            self.set_status("Filter cleared");
-        } else {
-            // Toggle on - set new filter
-            self.filter_mode = mode;
-            let filter_name = match mode {
-                FilterMode::Dead => "Dead paths",
-                FilterMode::Duplicates => "Duplicates",
-                FilterMode::NonNormalized => "Non-normalized",
-                FilterMode::Valid => "Valid paths",
-                FilterMode::None => "None",
-            };
-            self.set_status(&format!("Filter: {}", filter_name));
-        }
-    }
-
     // Bulk selection functions
     fn mark_all_visible(&mut self) {
         let count = match self.active_panel {
@@ -1642,6 +1660,7 @@ mod tests {
             processes_to_restart: Vec::new(),
             theme: Theme::default(),
             filter_mode: FilterMode::None,
+            filter_menu_selected: 0,
             last_click_time: std::time::Instant::now(),
             last_click_pos: (Panel::Machine, 0),
         }

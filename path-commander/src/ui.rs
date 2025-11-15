@@ -22,6 +22,7 @@ impl UI {
             Mode::Confirm(action) => self.render_confirm(f, app, action),
             Mode::BackupList => self.render_backup_list(f, app),
             Mode::ProcessRestartInfo => self.render_process_restart_info(f, app),
+            Mode::FilterMenu => self.render_filter_menu(f, app),
             _ => self.render_main(f, app),
         }
     }
@@ -361,10 +362,12 @@ impl UI {
                 "Filtering:",
                 Style::default().add_modifier(Modifier::BOLD),
             )]),
-            Line::from("  F11             Toggle filter: Dead paths"),
-            Line::from("  F12             Toggle filter: Duplicates"),
-            Line::from("  Shift+F11       Toggle filter: Non-normalized"),
-            Line::from("  Ctrl+F11        Toggle filter: Valid paths only"),
+            Line::from("  /               Open filter menu"),
+            Line::from("                  • Clear filter (show all)"),
+            Line::from("                  • Dead paths"),
+            Line::from("                  • Duplicates"),
+            Line::from("                  • Non-normalized paths"),
+            Line::from("                  • Valid paths only"),
             Line::from(""),
             Line::from(vec![Span::styled(
                 "Actions:",
@@ -700,6 +703,75 @@ impl UI {
             );
 
         let area = centered_rect(70, 50, f.area());
+        f.render_widget(ratatui::widgets::Clear, area);
+        f.render_widget(list, area);
+    }
+
+    fn render_filter_menu(&self, f: &mut Frame, app: &App) {
+        use crate::app::FilterMode;
+
+        // Filter options with descriptions
+        let filter_options = [
+            ("Clear Filter", "Show all paths", FilterMode::None),
+            (
+                "Dead Paths",
+                "Paths that don't exist on filesystem",
+                FilterMode::Dead,
+            ),
+            (
+                "Duplicates",
+                "Paths that appear multiple times",
+                FilterMode::Duplicates,
+            ),
+            (
+                "Non-Normalized",
+                "Paths with env vars or short names",
+                FilterMode::NonNormalized,
+            ),
+            (
+                "Valid Paths",
+                "Paths that are valid and unique",
+                FilterMode::Valid,
+            ),
+        ];
+
+        let items: Vec<ListItem> = filter_options
+            .iter()
+            .enumerate()
+            .map(|(idx, (name, description, filter_mode))| {
+                let is_selected = idx == app.filter_menu_selected;
+                let is_current = app.filter_mode == *filter_mode;
+
+                // Add indicator if this is the current filter
+                let current_marker = if is_current { " [ACTIVE]" } else { "" };
+                let display = format!("{}{}\n  {}", name, current_marker, description);
+
+                let mut style = Style::default();
+                if is_current {
+                    style = style.fg(Color::Cyan);
+                }
+                if is_selected {
+                    style = style.add_modifier(Modifier::REVERSED);
+                }
+
+                ListItem::new(display).style(style)
+            })
+            .collect();
+
+        let list = List::new(items)
+            .block(
+                Block::default()
+                    .title(" Filter Paths ")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Cyan)),
+            )
+            .highlight_style(
+                Style::default()
+                    .add_modifier(Modifier::REVERSED)
+                    .add_modifier(Modifier::BOLD),
+            );
+
+        let area = centered_rect(60, 60, f.area());
         f.render_widget(ratatui::widgets::Clear, area);
         f.render_widget(list, area);
     }
