@@ -4,9 +4,11 @@ mod path_analyzer;
 mod permissions;
 mod process_detector;
 mod registry;
+mod theme;
 mod ui;
 
 use anyhow::Result;
+use clap::Parser;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
     execute,
@@ -14,9 +16,21 @@ use crossterm::{
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
+use std::path::PathBuf;
 
 use app::App;
+use theme::Theme;
 use ui::UI;
+
+/// Path Commander - Windows PATH Environment Manager
+#[derive(Parser, Debug)]
+#[command(name = "pc")]
+#[command(about = "A TUI for managing Windows PATH environment variables", long_about = None)]
+struct Args {
+    /// Theme to use (built-in: default, dracula) or path to .ini skin file
+    #[arg(short, long)]
+    theme: Option<String>,
+}
 
 fn main() -> Result<()> {
     // Check if running on Windows
@@ -25,6 +39,23 @@ fn main() -> Result<()> {
         eprintln!("This application only runs on Windows.");
         std::process::exit(1);
     }
+
+    // Parse command-line arguments
+    let args = Args::parse();
+
+    // Load theme
+    let theme = if let Some(theme_name) = args.theme {
+        // Check if it's a file path
+        let path = PathBuf::from(&theme_name);
+        if path.exists() {
+            Theme::from_mc_skin(&path)?
+        } else {
+            // Try loading as built-in theme
+            Theme::builtin(&theme_name)?
+        }
+    } else {
+        Theme::default()
+    };
 
     // Check admin rights and notify user
     let is_admin = permissions::is_admin();
@@ -47,7 +78,7 @@ fn main() -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     // Create app state
-    let mut app = App::new()?;
+    let mut app = App::new(theme)?;
     let mut ui = UI::new();
 
     // Main loop

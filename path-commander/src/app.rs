@@ -7,6 +7,7 @@ use crate::backup::{self, PathBackup};
 use crate::path_analyzer::{analyze_paths, normalize_path, PathInfo};
 use crate::permissions;
 use crate::registry::{self, PathScope};
+use crate::theme::Theme;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Panel {
@@ -83,10 +84,11 @@ pub struct App {
     pub viewport_height: u16,
     pub pending_directory: String, // Temporarily stores path for directory creation confirmation
     pub processes_to_restart: Vec<String>, // List of processes that need restarting to pick up PATH changes
+    pub theme: Theme, // Color theme for UI rendering
 }
 
 impl App {
-    pub fn new() -> Result<Self> {
+    pub fn new(theme: Theme) -> Result<Self> {
         let is_admin = permissions::is_admin();
 
         // Read paths from registry
@@ -125,6 +127,7 @@ impl App {
             viewport_height: 10, // Default, will be updated based on terminal size
             pending_directory: String::new(),
             processes_to_restart: Vec::new(),
+            theme,
         })
     }
 
