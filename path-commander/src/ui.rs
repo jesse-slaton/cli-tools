@@ -372,14 +372,35 @@ impl UI {
     }
 
     fn render_help(&self, f: &mut Frame, app: &App) {
-        let help_text = vec![
-            Line::from(vec![Span::styled(
-                "Path Commander - Help",
+        // Create a centered dialog area
+        let area = centered_rect(90, 90, f.area());
+        f.render_widget(ratatui::widgets::Clear, area);
+
+        // Create outer block with title
+        let outer_block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(app.theme.dialog_border_fg))
+            .title(vec![Span::styled(
+                " Path Commander - Help ",
                 Style::default()
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),
-            )]),
-            Line::from(""),
+            )]);
+
+        let inner_area = outer_block.inner(area);
+        f.render_widget(outer_block, area);
+
+        // Split inner area into two columns with small gap
+        let columns = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(50), // Left column
+                Constraint::Percentage(50), // Right column
+            ])
+            .split(inner_area);
+
+        // Left column content
+        let left_text = vec![
             Line::from(vec![Span::styled(
                 "Navigation:",
                 Style::default().add_modifier(Modifier::BOLD),
@@ -393,13 +414,13 @@ impl UI {
                 "Selection:",
                 Style::default().add_modifier(Modifier::BOLD),
             )]),
-            Line::from("  Space, Insert   Toggle mark on current item"),
-            Line::from("  F2              Toggle mark (Midnight Commander style)"),
-            Line::from("  Ctrl+A          Mark all visible paths in current scope"),
-            Line::from("  Ctrl+Shift+A    Mark all paths in both scopes"),
-            Line::from("  Ctrl+D          Mark all duplicates in current scope"),
-            Line::from("  Ctrl+Shift+D    Mark all dead paths in current scope"),
-            Line::from("  Ctrl+N          Mark all non-normalized paths"),
+            Line::from("  Space, Insert   Toggle mark on current"),
+            Line::from("  F2              Toggle mark (MC style)"),
+            Line::from("  Ctrl+A          Mark all in current scope"),
+            Line::from("  Ctrl+Shift+A    Mark all in both scopes"),
+            Line::from("  Ctrl+D          Mark all duplicates"),
+            Line::from("  Ctrl+Shift+D    Mark all dead paths"),
+            Line::from("  Ctrl+N          Mark non-normalized paths"),
             Line::from("  Ctrl+Shift+U    Unmark all"),
             Line::from(""),
             Line::from(vec![Span::styled(
@@ -412,19 +433,22 @@ impl UI {
             Line::from("                  • Duplicates"),
             Line::from("                  • Non-normalized paths"),
             Line::from("                  • Valid paths only"),
-            Line::from(""),
+        ];
+
+        // Right column content
+        let right_text = vec![
             Line::from(vec![Span::styled(
                 "Actions:",
                 Style::default().add_modifier(Modifier::BOLD),
             )]),
             Line::from("  F3, Delete      Delete marked items"),
             Line::from("  F4              Add new path"),
-            Line::from("  F5              Move marked items to other panel"),
+            Line::from("  F5              Move marked to other panel"),
             Line::from("  F6              Move item up in order"),
             Line::from("  F7              Remove all duplicates"),
             Line::from("  F8              Remove all dead paths"),
             Line::from("  F9              Normalize selected paths"),
-            Line::from("  F10             Create marked dead directories"),
+            Line::from("  F10             Create marked dead dirs"),
             Line::from("  Enter           Edit current path"),
             Line::from(""),
             Line::from(vec![Span::styled(
@@ -442,7 +466,7 @@ impl UI {
             Line::from(vec![
                 Span::raw("  "),
                 Span::styled("Red", Style::default().fg(Color::Red)),
-                Span::raw(" - Dead path (does not exist)"),
+                Span::raw(" - Dead path (doesn't exist)"),
             ]),
             Line::from(vec![
                 Span::raw("  "),
@@ -452,32 +476,43 @@ impl UI {
             Line::from(vec![
                 Span::raw("  "),
                 Span::styled("Cyan", Style::default().fg(Color::Cyan)),
-                Span::raw(" - Non-normalized (contains ~, env vars)"),
+                Span::raw(" - Non-normalized"),
             ]),
             Line::from(vec![
                 Span::raw("  "),
                 Span::styled("Green", Style::default().fg(Color::Green)),
                 Span::raw(" - Valid, unique, normalized"),
             ]),
-            Line::from(""),
-            Line::from(vec![Span::styled(
-                "Press ESC or F1 to close this help",
-                Style::default().fg(Color::Yellow),
-            )]),
         ];
 
-        let help = Paragraph::new(help_text)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(app.theme.dialog_border_fg)),
-            )
+        // Create paragraphs for each column
+        let left_para = Paragraph::new(left_text)
             .alignment(Alignment::Left)
             .wrap(Wrap { trim: false });
 
-        let area = centered_rect(80, 90, f.area());
-        f.render_widget(ratatui::widgets::Clear, area);
-        f.render_widget(help, area);
+        let right_para = Paragraph::new(right_text)
+            .alignment(Alignment::Left)
+            .wrap(Wrap { trim: false });
+
+        // Render both columns
+        f.render_widget(left_para, columns[0]);
+        f.render_widget(right_para, columns[1]);
+
+        // Render footer message at the bottom of the dialog
+        let footer_area = Rect {
+            x: inner_area.x,
+            y: inner_area.y + inner_area.height - 1,
+            width: inner_area.width,
+            height: 1,
+        };
+
+        let footer = Paragraph::new(Line::from(vec![Span::styled(
+            "Press ESC or F1 to close this help",
+            Style::default().fg(Color::Yellow),
+        )]))
+        .alignment(Alignment::Center);
+
+        f.render_widget(footer, footer_area);
     }
 
     fn render_process_restart_info(&self, f: &mut Frame, app: &App) {
