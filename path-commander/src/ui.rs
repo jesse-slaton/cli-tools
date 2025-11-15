@@ -21,6 +21,7 @@ impl UI {
             Mode::Help => self.render_help(f),
             Mode::Confirm(action) => self.render_confirm(f, app, action),
             Mode::BackupList => self.render_backup_list(f, app),
+            Mode::ProcessRestartInfo => self.render_process_restart_info(f, app),
             _ => self.render_main(f, app),
         }
     }
@@ -338,6 +339,68 @@ impl UI {
         let area = centered_rect(80, 90, f.area());
         f.render_widget(ratatui::widgets::Clear, area);
         f.render_widget(help, area);
+    }
+
+    fn render_process_restart_info(&self, f: &mut Frame, app: &App) {
+        let mut lines = vec![
+            Line::from(vec![Span::styled(
+                "PATH Changes Applied Successfully!",
+                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+            )]),
+            Line::from(""),
+            Line::from(vec![Span::styled(
+                "Important: Some running processes need to be restarted",
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            )]),
+            Line::from(""),
+            Line::from("The following processes won't pick up the new PATH until restarted:"),
+            Line::from(""),
+        ];
+
+        // Add each process to the list
+        for process in &app.processes_to_restart {
+            lines.push(Line::from(vec![
+                Span::raw("  • "),
+                Span::styled(process, Style::default().fg(Color::Cyan)),
+            ]));
+        }
+
+        lines.push(Line::from(""));
+        lines.push(Line::from(vec![Span::styled(
+            "Why restart?",
+            Style::default().add_modifier(Modifier::BOLD),
+        )]));
+        lines.push(Line::from(
+            "These processes load environment variables at startup and don't respond to",
+        ));
+        lines.push(Line::from(
+            "WM_SETTINGCHANGE notifications. You'll need to close and reopen them to see",
+        ));
+        lines.push(Line::from("the updated PATH."));
+        lines.push(Line::from(""));
+        lines.push(Line::from(vec![Span::styled(
+            "Note: ",
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        ), Span::raw("New processes started after this point will see the updated PATH.")]));
+        lines.push(Line::from(""));
+        lines.push(Line::from(vec![Span::styled(
+            "Press ENTER or ESC to continue",
+            Style::default().fg(Color::Yellow),
+        )]));
+
+        let info = Paragraph::new(lines)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Yellow))
+                    .title(" Process Restart Required "),
+            )
+            .alignment(Alignment::Left)
+            .wrap(Wrap { trim: false });
+
+        let area = centered_rect(80, 80, f.area());
+        f.render_widget(ratatui::widgets::Clear, area);
+        f.render_widget(info, area);
     }
 
     fn render_confirm(&self, f: &mut Frame, app: &App, action: ConfirmAction) {

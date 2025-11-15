@@ -37,6 +37,7 @@ pub enum Mode {
     Confirm(ConfirmAction),
     Input(InputMode),
     BackupList,
+    ProcessRestartInfo,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,6 +82,7 @@ pub struct App {
     pub should_exit: bool,
     pub viewport_height: u16,
     pub pending_directory: String, // Temporarily stores path for directory creation confirmation
+    pub processes_to_restart: Vec<String>, // List of processes that need restarting to pick up PATH changes
 }
 
 impl App {
@@ -122,6 +124,7 @@ impl App {
             should_exit: false,
             viewport_height: 10, // Default, will be updated based on terminal size
             pending_directory: String::new(),
+            processes_to_restart: Vec::new(),
         })
     }
 
@@ -141,6 +144,7 @@ impl App {
             Mode::Confirm(action) => self.handle_confirm_input(key, action),
             Mode::Input(input_mode) => self.handle_input_mode(key, input_mode),
             Mode::BackupList => self.handle_backup_list_input(key),
+            Mode::ProcessRestartInfo => self.handle_process_restart_info_input(key),
         }
     }
 
@@ -234,6 +238,17 @@ impl App {
         match key.code {
             KeyCode::Esc | KeyCode::F(1) | KeyCode::Char('q') => {
                 self.mode = Mode::Normal;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn handle_process_restart_info_input(&mut self, key: KeyEvent) -> Result<()> {
+        match key.code {
+            KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') => {
+                self.mode = Mode::Normal;
+                self.set_status("Changes applied successfully!");
             }
             _ => {}
         }
@@ -1058,7 +1073,21 @@ impl App {
         self.machine_original = self.machine_paths.clone();
         self.has_changes = false;
 
-        self.set_status("Changes applied successfully!");
+        // Detect running processes that won't pick up the new PATH
+        match crate::process_detector::detect_running_processes() {
+            Ok(processes) if !processes.is_empty() => {
+                self.processes_to_restart = processes;
+                self.mode = Mode::ProcessRestartInfo;
+            }
+            Ok(_) => {
+                self.set_status("Changes applied successfully!");
+            }
+            Err(e) => {
+                // Process detection failed, but changes were still applied successfully
+                self.set_status(&format!("Changes applied! (Process detection failed: {})", e));
+            }
+        }
+
         Ok(())
     }
 

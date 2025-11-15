@@ -2,6 +2,7 @@ mod app;
 mod backup;
 mod path_analyzer;
 mod permissions;
+mod process_detector;
 mod registry;
 mod ui;
 
