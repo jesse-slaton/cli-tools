@@ -282,22 +282,36 @@ impl App {
 
     // Mouse event handling
     pub fn handle_mouse(&mut self, mouse: MouseEvent, terminal_size: Rect) -> Result<()> {
-        // Only handle mouse in Normal mode
-        if self.mode != Mode::Normal {
-            return Ok(());
-        }
-
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
-                self.handle_mouse_click(mouse.column, mouse.row, terminal_size, mouse.modifiers)?;
+                // Handle clicks based on current mode
+                match self.mode {
+                    Mode::Confirm(_) => {
+                        self.handle_confirm_dialog_click(mouse.column, mouse.row, terminal_size)?;
+                    }
+                    Mode::Normal => {
+                        // Check if click is on key hints area (bottom 2 rows)
+                        let hints_start = terminal_size.height.saturating_sub(2);
+                        if mouse.row >= hints_start {
+                            self.handle_hints_click(mouse.column, terminal_size.width)?;
+                        } else {
+                            self.handle_mouse_click(mouse.column, mouse.row, terminal_size, mouse.modifiers)?;
+                        }
+                    }
+                    _ => {}
+                }
             }
             MouseEventKind::ScrollUp => {
-                // Scroll up = content moves up = view moves down in list
-                self.move_selection(1);
+                // Only scroll in Normal mode
+                if self.mode == Mode::Normal {
+                    self.move_selection(1);
+                }
             }
             MouseEventKind::ScrollDown => {
-                // Scroll down = content moves down = view moves up in list
-                self.move_selection(-1);
+                // Only scroll in Normal mode
+                if self.mode == Mode::Normal {
+                    self.move_selection(-1);
+                }
             }
             _ => {}
         }
@@ -475,6 +489,116 @@ impl App {
                         self.user_marked.insert(self.user_selected);
                     }
                 }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn handle_hints_click(&mut self, x: u16, width: u16) -> Result<()> {
+        // Key hints are centered, so calculate the starting position
+        // Hint text: "F1 Help │ F2 Mark │ F3 Del │ F4 Add │ F5 Move │ F9 Normalize │ Ctrl+S Save │ Ctrl+B Backup │ Q Quit"
+        // Approximate positions (these are rough estimates for center-aligned text)
+        let hint_text_len = 92; // Approximate total length
+        let start_x = (width.saturating_sub(hint_text_len)) / 2;
+
+        // Calculate relative position
+        if x < start_x {
+            return Ok(());
+        }
+
+        let relative_x = x - start_x;
+
+        // Map click positions to keys (approximate character positions)
+        // F1: 0-2, Help: 3-7, │: 8, space: 9
+        // F2: 10-12, Mark: 13-17, │: 18, space: 19
+        // F3: 20-22, Del: 23-26, │: 27, space: 28
+        // F4: 29-31, Add: 32-35, │: 36, space: 37
+        // F5: 38-40, Move: 41-45, │: 46, space: 47
+        // F9: 48-50, Normalize: 51-61, │: 62, space: 63
+        // Ctrl+S: 64-70, Save: 71-75, │: 76, space: 77
+        // Ctrl+B: 78-84, Backup: 85-91, │: 92, space: 93
+        // Q: 94-95, Quit: 96-100
+
+        match relative_x {
+            0..=9 => self.mode = Mode::Help,                    // F1 Help
+            10..=19 => self.toggle_mark(),                      // F2 Mark
+            20..=28 => {                                        // F3 Del
+                if self.has_marked_items() {
+                    self.mode = Mode::Confirm(ConfirmAction::DeleteSelected);
+                }
+            }
+            29..=37 => self.start_add_path(),                   // F4 Add
+            38..=47 => { let _ = self.move_marked_to_other_panel(); } // F5 Move
+            48..=63 => self.normalize_selected(),               // F9 Normalize
+            64..=77 => {                                        // Ctrl+S Save
+                if self.has_changes {
+                    self.mode = Mode::Confirm(ConfirmAction::ApplyChanges);
+                } else {
+                    self.set_status("No changes to save");
+                }
+            }
+            78..=93 => { let _ = self.create_backup(); }        // Ctrl+B Backup
+            94..=100 => { let _ = self.confirm_exit(); }        // Q Quit
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    fn handle_confirm_dialog_click(&mut self, x: u16, y: u16, terminal_size: Rect) -> Result<()> {
+        // Dialog is 60% width, 30% height, centered
+        let dialog_width = (terminal_size.width * 60) / 100;
+        let dialog_height = (terminal_size.height * 30) / 100;
+        let dialog_x = (terminal_size.width - dialog_width) / 2;
+        let dialog_y = (terminal_size.height - dialog_height) / 2;
+
+        // Check if click is within dialog bounds
+        if x < dialog_x || x >= dialog_x + dialog_width {
+            return Ok(());
+        }
+        if y < dialog_y || y >= dialog_y + dialog_height {
+            return Ok(());
+        }
+
+        // Calculate relative position within dialog
+        let relative_y = y - dialog_y;
+
+        // "Yes / No" is on line 3 of the dialog (after empty line, message, empty line)
+        // Dialog has border, so content starts at y=1
+        // Line 0: border
+        // Line 1: empty
+        // Line 2: message
+        // Line 3: empty
+        // Line 4: "Yes / No"
+        if relative_y == 4 {
+            let relative_x = x - dialog_x;
+            let center_x = dialog_width / 2;
+
+            // "Yes / No" is centered
+            // "Y" is approximately at center - 4
+            // "N" is approximately at center + 3
+            let yes_x = center_x.saturating_sub(4);
+            let no_x = center_x + 3;
+
+            if relative_x >= yes_x.saturating_sub(2) && relative_x <= yes_x + 2 {
+                // Clicked on "Yes"
+                if let Mode::Confirm(action) = self.mode {
+                    self.mode = Mode::Normal;
+                    match action {
+                        ConfirmAction::Exit => {
+                            // Will be handled by main loop
+                        }
+                        ConfirmAction::DeleteSelected => self.delete_marked()?,
+                        ConfirmAction::DeleteAllDead => self.delete_all_dead()?,
+                        ConfirmAction::DeleteAllDuplicates => self.delete_all_duplicates()?,
+                        ConfirmAction::ApplyChanges => self.apply_changes()?,
+                        ConfirmAction::RestoreBackup => self.restore_selected_backup()?,
+                    }
+                }
+            } else if relative_x >= no_x.saturating_sub(2) && relative_x <= no_x + 2 {
+                // Clicked on "No"
+                self.mode = Mode::Normal;
             }
         }
 
