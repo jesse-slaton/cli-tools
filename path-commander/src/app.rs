@@ -85,6 +85,8 @@ pub struct App {
     pub pending_directory: String, // Temporarily stores path for directory creation confirmation
     pub processes_to_restart: Vec<String>, // List of processes that need restarting to pick up PATH changes
     pub theme: Theme,                      // Color theme for UI rendering
+    last_click_time: std::time::Instant,   // Time of last mouse click for double-click detection
+    last_click_pos: (Panel, usize),        // Panel and row of last click
 }
 
 impl App {
@@ -128,6 +130,8 @@ impl App {
             pending_directory: String::new(),
             processes_to_restart: Vec::new(),
             theme,
+            last_click_time: std::time::Instant::now(),
+            last_click_pos: (Panel::Machine, 0),
         })
     }
 
@@ -532,10 +536,30 @@ impl App {
         self.active_panel = clicked_panel;
         self.move_selection_to(list_row);
 
-        // Check if click is on checkbox area
+        // Define checkbox area bounds (used for both double-click check and marking)
         // Checkbox is at relative_x = 1 (border) to 5 (border + "[ ] ")
         let checkbox_start = 1; // After left border
         let checkbox_end = 5; // "[ ] " is 4 chars
+
+        // Check for double-click (two clicks on same item within 500ms)
+        let now = std::time::Instant::now();
+        let double_click_threshold = std::time::Duration::from_millis(500);
+        let is_same_position = self.last_click_pos == (clicked_panel, list_row);
+        let is_within_time = now.duration_since(self.last_click_time) < double_click_threshold;
+
+        if is_same_position && is_within_time && relative_x >= checkbox_end {
+            // Double-click detected outside checkbox area - edit the path
+            self.start_edit_path();
+            // Reset click tracking to prevent triple-click issues
+            self.last_click_time = std::time::Instant::now() - double_click_threshold;
+            return Ok(());
+        }
+
+        // Update click tracking for next potential double-click
+        self.last_click_time = now;
+        self.last_click_pos = (clicked_panel, list_row);
+
+        // Check if click is on checkbox area
 
         if relative_x >= checkbox_start && relative_x < checkbox_end {
             // Clicked on checkbox - toggle mark (without auto-advance)
@@ -1399,6 +1423,8 @@ mod tests {
             pending_directory: String::new(),
             processes_to_restart: Vec::new(),
             theme: Theme::default(),
+            last_click_time: std::time::Instant::now(),
+            last_click_pos: (Panel::Machine, 0),
         }
     }
 

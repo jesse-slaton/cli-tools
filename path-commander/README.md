@@ -106,6 +106,24 @@ pc
 - `Q`, `F10`, `Esc` - Exit (with confirmation if changes exist)
 - `Ctrl+C` - Force quit
 
+### Mouse Support
+
+Path Commander has full mouse support for efficient navigation and editing:
+
+#### Basic Mouse Operations
+- **Click** - Select a path entry and switch to that panel
+- **Double-click** - Edit the selected path (same as pressing Enter)
+- **Scroll wheel** - Scroll through the path list
+- **Click on scrollbar** - Jump to that position in the list
+- **Click on checkbox** - Toggle mark on that path
+- **Click on key hints** - Execute that command (F1-F9, Ctrl+S, etc.)
+
+#### Advanced Mouse Operations
+- **Ctrl+Click** - Toggle mark on an item without changing selection
+- **Shift+Click** - Range select (mark all items between current selection and clicked item)
+
+You can mix keyboard and mouse interactions seamlessly for maximum efficiency.
+
 ## How It Works
 
 ### Path Analysis
@@ -266,8 +284,7 @@ Potential future features:
 - Search/filter paths
 - Duplicate detection across similar patterns (e.g., different versions of the same tool)
 - Integration with UAC elevation from within the app
-- Mouse support
-- Themes/color customization
+- Themes/color customization (basic theme support already implemented)
 
 ## Acknowledgments
 
