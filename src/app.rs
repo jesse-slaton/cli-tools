@@ -76,6 +76,7 @@ pub struct App {
     pub backup_selected: usize,
     pub machine_scrollbar_state: ScrollbarState,
     pub user_scrollbar_state: ScrollbarState,
+    pub should_exit: bool,
 }
 
 impl App {
@@ -114,6 +115,7 @@ impl App {
             input_buffer: String::new(),
             backup_list: Vec::new(),
             backup_selected: 0,
+            should_exit: false,
         })
     }
 
@@ -213,7 +215,7 @@ impl App {
                 self.mode = Mode::Normal;
                 match action {
                     ConfirmAction::Exit => {
-                        // Will be handled by main loop
+                        self.should_exit = true;
                     }
                     ConfirmAction::DeleteSelected => self.delete_marked()?,
                     ConfirmAction::DeleteAllDead => self.delete_all_dead()?,
@@ -539,7 +541,7 @@ impl App {
                 }
             }
             77..=92 => { let _ = self.create_backup(); }        // Ctrl+B Backup
-            93..=99 => { let _ = self.confirm_exit(); }         // Q Quit
+            93..=99 => self.confirm_exit(),                     // Q Quit
             _ => {}
         }
 
@@ -587,7 +589,7 @@ impl App {
                     self.mode = Mode::Normal;
                     match action {
                         ConfirmAction::Exit => {
-                            // Will be handled by main loop
+                            self.should_exit = true;
                         }
                         ConfirmAction::DeleteSelected => self.delete_marked()?,
                         ConfirmAction::DeleteAllDead => self.delete_all_dead()?,
@@ -997,12 +999,11 @@ impl App {
         Ok(())
     }
 
-    pub fn confirm_exit(&mut self) -> bool {
+    pub fn confirm_exit(&mut self) {
         if self.has_changes {
             self.mode = Mode::Confirm(ConfirmAction::Exit);
-            false
         } else {
-            true
+            self.should_exit = true;
         }
     }
 

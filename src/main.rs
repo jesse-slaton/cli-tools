@@ -92,6 +92,11 @@ fn run_app<B: ratatui::backend::Backend>(
     loop {
         terminal.draw(|f| ui.render(f, app))?;
 
+        // Check if app wants to exit
+        if app.should_exit {
+            break;
+        }
+
         match event::read()? {
             Event::Key(key) => {
                 let now = std::time::Instant::now();
@@ -113,9 +118,7 @@ fn run_app<B: ratatui::backend::Backend>(
                         (KeyCode::Char('q'), KeyModifiers::NONE) => {
                             // Only handle 'q' in Normal mode, otherwise let app handle it
                             if matches!(app.mode, app::Mode::Normal) {
-                                if app.confirm_exit() {
-                                    break;
-                                }
+                                app.confirm_exit();
                             } else {
                                 app.handle_input(key)?;
                             }
@@ -123,9 +126,7 @@ fn run_app<B: ratatui::backend::Backend>(
                         (KeyCode::F(10), _) | (KeyCode::Esc, _) => {
                             // Only handle ESC/F10 as quit in Normal mode
                             if matches!(app.mode, app::Mode::Normal) {
-                                if app.confirm_exit() {
-                                    break;
-                                }
+                                app.confirm_exit();
                             } else {
                                 app.handle_input(key)?;
                             }
