@@ -6,8 +6,17 @@ use std::collections::HashSet;
 use crate::backup::{self, PathBackup};
 use crate::path_analyzer::{analyze_paths, normalize_path, PathInfo};
 use crate::permissions;
-use crate::registry::{self, PathScope};
+use crate::registry::{self, PathScope, RemoteConnection};
 use crate::theme::Theme;
+
+/// Represents the connection mode of the application
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionMode {
+    /// Local mode: Machine (left) and User (right) panels
+    Local,
+    /// Remote mode: Local Machine (left) and Remote Machine (right) panels
+    Remote,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Panel {
@@ -53,12 +62,14 @@ pub enum ConfirmAction {
     RestoreBackup,
     CreateSingleDirectory,
     CreateMarkedDirectories,
+    DisconnectRemote,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputMode {
     AddPath,
     EditPath,
+    ConnectRemote,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,12 +123,21 @@ pub enum Operation {
 }
 
 pub struct App {
+    pub connection_mode: ConnectionMode, // Local or Remote mode
+    pub remote_connection: Option<RemoteConnection>, // Remote connection if in Remote mode
     pub machine_paths: Vec<String>,
     pub user_paths: Vec<String>,
     pub machine_info: Vec<PathInfo>,
     pub user_info: Vec<PathInfo>,
     pub machine_original: Vec<String>,
     pub user_original: Vec<String>,
+    // Remote machine paths (used when in Remote mode for the right panel)
+    pub remote_machine_paths: Vec<String>,
+    pub remote_machine_info: Vec<PathInfo>,
+    pub remote_machine_original: Vec<String>,
+    pub remote_machine_selected: usize,
+    pub remote_machine_marked: HashSet<usize>,
+    pub remote_scrollbar_state: ScrollbarState,
     pub active_panel: Panel,
     pub machine_selected: usize,
     pub user_selected: usize,
@@ -163,14 +183,22 @@ impl App {
         let machine_info = analyze_paths(&machine_paths, &user_paths);
 
         Ok(Self {
+            connection_mode: ConnectionMode::Local,
+            remote_connection: None,
             machine_scrollbar_state: ScrollbarState::new(machine_paths.len()).position(0),
             user_scrollbar_state: ScrollbarState::new(user_paths.len()).position(0),
+            remote_scrollbar_state: ScrollbarState::new(0).position(0),
             machine_paths: machine_paths.clone(),
             user_paths: user_paths.clone(),
             machine_info,
             user_info,
             machine_original: machine_paths,
             user_original: user_paths,
+            remote_machine_paths: Vec::new(),
+            remote_machine_info: Vec::new(),
+            remote_machine_original: Vec::new(),
+            remote_machine_selected: 0,
+            remote_machine_marked: HashSet::new(),
             active_panel: Panel::Machine,
             machine_selected: 0,
             user_selected: 0,
@@ -197,6 +225,72 @@ impl App {
             last_click_time: std::time::Instant::now(),
             last_click_pos: (Panel::Machine, 0),
         })
+    }
+
+    /// Create a new App with a remote connection
+    pub fn new_with_remote(theme: Theme, remote_computer: &str) -> Result<Self> {
+        let mut app = Self::new(theme)?;
+        app.connect_to_remote(remote_computer)?;
+        Ok(app)
+    }
+
+    /// Connect to a remote computer
+    pub fn connect_to_remote(&mut self, computer_name: &str) -> Result<()> {
+        // Establish remote connection
+        let connection = RemoteConnection::connect(computer_name)?;
+
+        // Read remote MACHINE paths
+        let remote_path_string = registry::read_path_remote(PathScope::Machine, &connection)?;
+        let remote_paths = registry::parse_path(&remote_path_string);
+
+        // Analyze remote paths (compare with local machine paths for cross-scope duplicates)
+        let remote_info = analyze_paths(&remote_paths, &self.machine_paths);
+
+        // Update app state to remote mode
+        self.connection_mode = ConnectionMode::Remote;
+        self.remote_machine_paths = remote_paths.clone();
+        self.remote_machine_info = remote_info;
+        self.remote_machine_original = remote_paths.clone();
+        self.remote_machine_selected = 0;
+        self.remote_machine_marked = HashSet::new();
+        self.remote_scrollbar_state = ScrollbarState::new(remote_paths.len()).position(0);
+        self.remote_connection = Some(connection);
+
+        // Update status message
+        self.status_message = format!(
+            "Connected to remote computer: {} | {}",
+            computer_name,
+            permissions::get_privilege_message()
+        );
+
+        Ok(())
+    }
+
+    /// Disconnect from remote computer and return to local mode
+    pub fn disconnect_from_remote(&mut self) -> Result<()> {
+        if self.connection_mode == ConnectionMode::Local {
+            return Ok(());
+        }
+
+        // Clear remote connection and data
+        self.connection_mode = ConnectionMode::Local;
+        self.remote_connection = None;
+        self.remote_machine_paths.clear();
+        self.remote_machine_info.clear();
+        self.remote_machine_original.clear();
+        self.remote_machine_selected = 0;
+        self.remote_machine_marked.clear();
+        self.remote_scrollbar_state = ScrollbarState::new(0).position(0);
+
+        // Switch back to Machine panel if on User panel (which was showing remote)
+        if self.active_panel == Panel::User {
+            self.active_panel = Panel::Machine;
+        }
+
+        // Update status message
+        self.status_message = permissions::get_privilege_message();
+
+        Ok(())
     }
 
     /// Update viewport height based on terminal size
@@ -309,6 +403,20 @@ impl App {
                 }
             }
             (KeyCode::Char('b'), KeyModifiers::CONTROL) => self.create_backup()?,
+            (KeyCode::Char('o'), KeyModifiers::CONTROL) => {
+                // Connect to or disconnect from remote computer
+                match self.connection_mode {
+                    ConnectionMode::Local => {
+                        // Open connection dialog
+                        self.mode = Mode::Input(InputMode::ConnectRemote);
+                        self.input_buffer.clear();
+                    }
+                    ConnectionMode::Remote => {
+                        // Confirm disconnect
+                        self.mode = Mode::Confirm(ConfirmAction::DisconnectRemote);
+                    }
+                }
+            }
 
             // Undo/Redo
             (KeyCode::Char('z'), KeyModifiers::CONTROL) => self.undo()?,
@@ -381,6 +489,10 @@ impl App {
                     ConfirmAction::RestoreBackup => self.restore_selected_backup()?,
                     ConfirmAction::CreateSingleDirectory => self.create_single_directory()?,
                     ConfirmAction::CreateMarkedDirectories => self.create_marked_directories()?,
+                    ConfirmAction::DisconnectRemote => {
+                        self.disconnect_from_remote()?;
+                        self.set_status("Disconnected from remote computer");
+                    }
                 }
             }
             KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
@@ -398,6 +510,25 @@ impl App {
                 match input_mode {
                     InputMode::AddPath => self.add_path_from_input()?,
                     InputMode::EditPath => self.update_path_from_input()?,
+                    InputMode::ConnectRemote => {
+                        let computer_name = self.input_buffer.trim().to_string();
+                        if !computer_name.is_empty() {
+                            match self.connect_to_remote(&computer_name) {
+                                Ok(()) => {
+                                    self.set_status(&format!(
+                                        "Successfully connected to {}",
+                                        computer_name
+                                    ));
+                                }
+                                Err(e) => {
+                                    self.set_status(&format!(
+                                        "Failed to connect to {}: {}",
+                                        computer_name, e
+                                    ));
+                                }
+                            }
+                        }
+                    }
                 }
                 self.input_buffer.clear();
             }
@@ -912,6 +1043,10 @@ impl App {
                         ConfirmAction::CreateSingleDirectory => self.create_single_directory()?,
                         ConfirmAction::CreateMarkedDirectories => {
                             self.create_marked_directories()?
+                        }
+                        ConfirmAction::DisconnectRemote => {
+                            self.disconnect_from_remote()?;
+                            self.set_status("Disconnected from remote computer");
                         }
                     }
                 }
@@ -1534,19 +1669,46 @@ impl App {
         // Save current state as backup first
         self.create_backup()?;
 
-        // Apply user paths
-        let user_path = registry::join_paths(&self.user_paths);
-        registry::write_path(PathScope::User, &user_path)?;
+        match self.connection_mode {
+            ConnectionMode::Local => {
+                // Apply user paths
+                let user_path = registry::join_paths(&self.user_paths);
+                registry::write_path(PathScope::User, &user_path)?;
 
-        // Apply machine paths (if admin)
-        if self.is_admin {
-            let machine_path = registry::join_paths(&self.machine_paths);
-            registry::write_path(PathScope::Machine, &machine_path)?;
+                // Apply machine paths (if admin)
+                if self.is_admin {
+                    let machine_path = registry::join_paths(&self.machine_paths);
+                    registry::write_path(PathScope::Machine, &machine_path)?;
+                }
+
+                // Update originals
+                self.user_original = self.user_paths.clone();
+                self.machine_original = self.machine_paths.clone();
+            }
+            ConnectionMode::Remote => {
+                // In remote mode, only write to local MACHINE and remote MACHINE
+                // (USER paths are not shown/editable in remote mode)
+
+                // Apply local machine paths (if admin)
+                if self.is_admin {
+                    let machine_path = registry::join_paths(&self.machine_paths);
+                    registry::write_path(PathScope::Machine, &machine_path)?;
+                }
+
+                // Apply remote machine paths (if connected and admin)
+                if self.is_admin {
+                    if let Some(ref connection) = self.remote_connection {
+                        let remote_path = registry::join_paths(&self.remote_machine_paths);
+                        registry::write_path_remote(PathScope::Machine, &remote_path, connection)?;
+                    }
+                }
+
+                // Update originals
+                self.machine_original = self.machine_paths.clone();
+                self.remote_machine_original = self.remote_machine_paths.clone();
+            }
         }
 
-        // Update originals
-        self.user_original = self.user_paths.clone();
-        self.machine_original = self.machine_paths.clone();
         self.has_changes = false;
 
         // Note: Undo/redo stacks are NOT cleared on save, allowing users to undo changes even after saving
@@ -1745,26 +1907,64 @@ impl App {
     }
 
     fn reanalyze(&mut self) {
-        self.user_info = analyze_paths(&self.user_paths, &self.machine_paths);
-        self.machine_info = analyze_paths(&self.machine_paths, &self.user_paths);
+        match self.connection_mode {
+            ConnectionMode::Local => {
+                self.user_info = analyze_paths(&self.user_paths, &self.machine_paths);
+                self.machine_info = analyze_paths(&self.machine_paths, &self.user_paths);
 
-        // Update scrollbar content lengths
-        self.machine_scrollbar_state = self
-            .machine_scrollbar_state
-            .content_length(self.machine_paths.len());
-        self.user_scrollbar_state = self
-            .user_scrollbar_state
-            .content_length(self.user_paths.len());
+                // Update scrollbar content lengths
+                self.machine_scrollbar_state = self
+                    .machine_scrollbar_state
+                    .content_length(self.machine_paths.len());
+                self.user_scrollbar_state = self
+                    .user_scrollbar_state
+                    .content_length(self.user_paths.len());
 
-        // Adjust selection if out of bounds
-        if self.machine_selected >= self.machine_paths.len() && !self.machine_paths.is_empty() {
-            self.machine_selected = self.machine_paths.len() - 1;
-            self.machine_scrollbar_state =
-                self.machine_scrollbar_state.position(self.machine_selected);
-        }
-        if self.user_selected >= self.user_paths.len() && !self.user_paths.is_empty() {
-            self.user_selected = self.user_paths.len() - 1;
-            self.user_scrollbar_state = self.user_scrollbar_state.position(self.user_selected);
+                // Adjust selection if out of bounds
+                if self.machine_selected >= self.machine_paths.len()
+                    && !self.machine_paths.is_empty()
+                {
+                    self.machine_selected = self.machine_paths.len() - 1;
+                    self.machine_scrollbar_state =
+                        self.machine_scrollbar_state.position(self.machine_selected);
+                }
+                if self.user_selected >= self.user_paths.len() && !self.user_paths.is_empty() {
+                    self.user_selected = self.user_paths.len() - 1;
+                    self.user_scrollbar_state =
+                        self.user_scrollbar_state.position(self.user_selected);
+                }
+            }
+            ConnectionMode::Remote => {
+                // In remote mode: analyze local machine vs remote machine paths
+                self.machine_info = analyze_paths(&self.machine_paths, &self.remote_machine_paths);
+                self.remote_machine_info =
+                    analyze_paths(&self.remote_machine_paths, &self.machine_paths);
+
+                // Update scrollbar content lengths
+                self.machine_scrollbar_state = self
+                    .machine_scrollbar_state
+                    .content_length(self.machine_paths.len());
+                self.remote_scrollbar_state = self
+                    .remote_scrollbar_state
+                    .content_length(self.remote_machine_paths.len());
+
+                // Adjust selection if out of bounds
+                if self.machine_selected >= self.machine_paths.len()
+                    && !self.machine_paths.is_empty()
+                {
+                    self.machine_selected = self.machine_paths.len() - 1;
+                    self.machine_scrollbar_state =
+                        self.machine_scrollbar_state.position(self.machine_selected);
+                }
+                if self.remote_machine_selected >= self.remote_machine_paths.len()
+                    && !self.remote_machine_paths.is_empty()
+                {
+                    self.remote_machine_selected = self.remote_machine_paths.len() - 1;
+                    self.remote_scrollbar_state = self
+                        .remote_scrollbar_state
+                        .position(self.remote_machine_selected);
+                }
+            }
         }
     }
 
@@ -2226,12 +2426,20 @@ mod tests {
         let user_info = analyze_paths(&user_paths, &machine_paths);
 
         App {
+            connection_mode: ConnectionMode::Local,
+            remote_connection: None,
             machine_paths: machine_paths.clone(),
             user_paths: user_paths.clone(),
             machine_info,
             user_info,
             machine_original: machine_paths,
             user_original: user_paths,
+            remote_machine_paths: Vec::new(),
+            remote_machine_info: Vec::new(),
+            remote_machine_original: Vec::new(),
+            remote_machine_selected: 0,
+            remote_machine_marked: HashSet::new(),
+            remote_scrollbar_state: ScrollbarState::default(),
             active_panel: Panel::User,
             machine_selected: 0,
             user_selected: 0,

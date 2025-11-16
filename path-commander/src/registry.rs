@@ -4,9 +4,9 @@ use std::os::windows::ffi::OsStringExt;
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::ERROR_SUCCESS;
 use windows::Win32::System::Registry::{
-    RegCloseKey, RegGetValueW, RegOpenKeyExW, RegSetValueExW, HKEY, HKEY_CURRENT_USER,
-    HKEY_LOCAL_MACHINE, KEY_READ, KEY_WRITE, REG_EXPAND_SZ, REG_VALUE_TYPE, RRF_RT_REG_EXPAND_SZ,
-    RRF_RT_REG_SZ,
+    RegCloseKey, RegConnectRegistryW, RegGetValueW, RegOpenKeyExW, RegSetValueExW, HKEY,
+    HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, KEY_WRITE, REG_EXPAND_SZ, REG_VALUE_TYPE,
+    RRF_RT_REG_EXPAND_SZ, RRF_RT_REG_SZ,
 };
 
 const ENVIRONMENT_KEY: &str = "Environment";
@@ -30,12 +30,118 @@ impl PathScope {
     }
 }
 
+/// Represents a connection to a remote computer's registry
+pub struct RemoteConnection {
+    computer_name: String,
+    hkey_local_machine: HKEY,
+    hkey_current_user: HKEY,
+}
+
+impl RemoteConnection {
+    /// Connect to a remote computer's registry
+    pub fn connect(computer_name: &str) -> Result<Self> {
+        unsafe {
+            let computer_name_wide = to_wide_string(computer_name);
+
+            // Connect to HKEY_LOCAL_MACHINE on remote computer
+            let mut hkey_local_machine = HKEY::default();
+            let result = RegConnectRegistryW(
+                PCWSTR(computer_name_wide.as_ptr()),
+                HKEY_LOCAL_MACHINE,
+                &mut hkey_local_machine,
+            );
+
+            if result != ERROR_SUCCESS {
+                return Err(anyhow::anyhow!(
+                    "Failed to connect to remote computer '{}': Error code {}. \
+                    Ensure the computer is reachable, Remote Registry service is running, \
+                    and you have administrative privileges.",
+                    computer_name,
+                    result.0
+                ));
+            }
+
+            // Connect to HKEY_CURRENT_USER on remote computer
+            let mut hkey_current_user = HKEY::default();
+            let result = RegConnectRegistryW(
+                PCWSTR(computer_name_wide.as_ptr()),
+                HKEY_CURRENT_USER,
+                &mut hkey_current_user,
+            );
+
+            if result != ERROR_SUCCESS {
+                // Clean up the HKEY_LOCAL_MACHINE handle before returning error
+                let _ = RegCloseKey(hkey_local_machine);
+                return Err(anyhow::anyhow!(
+                    "Failed to connect to remote HKEY_CURRENT_USER on '{}': Error code {}",
+                    computer_name,
+                    result.0
+                ));
+            }
+
+            Ok(RemoteConnection {
+                computer_name: computer_name.to_string(),
+                hkey_local_machine,
+                hkey_current_user,
+            })
+        }
+    }
+
+    /// Get the computer name for this connection
+    pub fn computer_name(&self) -> &str {
+        &self.computer_name
+    }
+
+    /// Get the HKEY handle for the specified scope
+    fn get_hkey(&self, scope: PathScope) -> HKEY {
+        match scope {
+            PathScope::User => self.hkey_current_user,
+            PathScope::Machine => self.hkey_local_machine,
+        }
+    }
+}
+
+impl Drop for RemoteConnection {
+    fn drop(&mut self) {
+        unsafe {
+            // Close both registry handles when the connection is dropped
+            let _ = RegCloseKey(self.hkey_local_machine);
+            let _ = RegCloseKey(self.hkey_current_user);
+        }
+    }
+}
+
 /// Read the PATH environment variable from the registry
 pub fn read_path(scope: PathScope) -> Result<String> {
+    read_path_with_connection(scope, None)
+}
+
+/// Read the PATH environment variable from a remote registry
+pub fn read_path_remote(scope: PathScope, connection: &RemoteConnection) -> Result<String> {
+    read_path_with_connection(scope, Some(connection))
+}
+
+/// Internal function to read PATH with optional remote connection
+fn read_path_with_connection(
+    scope: PathScope,
+    connection: Option<&RemoteConnection>,
+) -> Result<String> {
     unsafe {
-        let (hkey_root, subkey) = match scope {
-            PathScope::User => (HKEY_CURRENT_USER, ENVIRONMENT_KEY),
-            PathScope::Machine => (HKEY_LOCAL_MACHINE, SYSTEM_ENVIRONMENT_KEY),
+        let (hkey_root, subkey) = if let Some(conn) = connection {
+            // Use remote connection handle
+            (
+                conn.get_hkey(scope),
+                match scope {
+                    PathScope::User => ENVIRONMENT_KEY,
+                    PathScope::Machine => SYSTEM_ENVIRONMENT_KEY,
+                },
+            )
+        } else {
+            // Use local registry
+            match scope {
+                PathScope::User => (HKEY_CURRENT_USER, ENVIRONMENT_KEY),
+                PathScope::Machine => (HKEY_LOCAL_MACHINE, SYSTEM_ENVIRONMENT_KEY),
+            }
         };
 
         let mut hkey = HKEY::default();
@@ -111,10 +217,40 @@ pub fn read_path(scope: PathScope) -> Result<String> {
 
 /// Write the PATH environment variable to the registry
 pub fn write_path(scope: PathScope, value: &str) -> Result<()> {
+    write_path_with_connection(scope, value, None)
+}
+
+/// Write the PATH environment variable to a remote registry
+pub fn write_path_remote(
+    scope: PathScope,
+    value: &str,
+    connection: &RemoteConnection,
+) -> Result<()> {
+    write_path_with_connection(scope, value, Some(connection))
+}
+
+/// Internal function to write PATH with optional remote connection
+fn write_path_with_connection(
+    scope: PathScope,
+    value: &str,
+    connection: Option<&RemoteConnection>,
+) -> Result<()> {
     unsafe {
-        let (hkey_root, subkey) = match scope {
-            PathScope::User => (HKEY_CURRENT_USER, ENVIRONMENT_KEY),
-            PathScope::Machine => (HKEY_LOCAL_MACHINE, SYSTEM_ENVIRONMENT_KEY),
+        let (hkey_root, subkey) = if let Some(conn) = connection {
+            // Use remote connection handle
+            (
+                conn.get_hkey(scope),
+                match scope {
+                    PathScope::User => ENVIRONMENT_KEY,
+                    PathScope::Machine => SYSTEM_ENVIRONMENT_KEY,
+                },
+            )
+        } else {
+            // Use local registry
+            match scope {
+                PathScope::User => (HKEY_CURRENT_USER, ENVIRONMENT_KEY),
+                PathScope::Machine => (HKEY_LOCAL_MACHINE, SYSTEM_ENVIRONMENT_KEY),
+            }
         };
 
         let mut hkey = HKEY::default();

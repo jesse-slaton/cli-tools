@@ -139,18 +139,35 @@ impl UI {
             },
         ));
 
-        let title = vec![
-            Line::from(vec![
-                Span::styled(
-                    "Path Commander",
-                    Style::default()
-                        .fg(app.theme.header_fg)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(" - Windows PATH Environment Manager"),
-            ]),
-            Line::from(second_line_spans),
+        // Build first line with connection mode indicator
+        let mut first_line_spans = vec![
+            Span::styled(
+                "Path Commander",
+                Style::default()
+                    .fg(app.theme.header_fg)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" - Windows PATH Environment Manager"),
         ];
+
+        // Add connection mode indicator if in remote mode
+        if let Some(ref connection) = app.remote_connection {
+            first_line_spans.push(Span::raw(" │ "));
+            first_line_spans.push(Span::styled(
+                "REMOTE: ",
+                Style::default()
+                    .fg(app.theme.path_duplicate_fg)
+                    .add_modifier(Modifier::BOLD),
+            ));
+            first_line_spans.push(Span::styled(
+                connection.computer_name(),
+                Style::default()
+                    .fg(app.theme.path_valid_fg)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        }
+
+        let title = vec![Line::from(first_line_spans), Line::from(second_line_spans)];
 
         let header = Paragraph::new(title)
             .block(Block::default().borders(Borders::ALL))
@@ -160,21 +177,39 @@ impl UI {
     }
 
     fn render_panel(&self, f: &mut Frame, area: Rect, app: &App, panel: Panel) {
+        use crate::app::ConnectionMode;
+
         let is_active = app.active_panel == panel;
-        let (paths, info, selected, marked, scrollbar_state) = match panel {
-            Panel::Machine => (
+
+        // In Remote mode, Panel::User shows remote MACHINE paths instead of USER paths
+        let (paths, info, selected, marked, scrollbar_state) = match (app.connection_mode, panel) {
+            (ConnectionMode::Local, Panel::Machine) => (
                 &app.machine_paths,
                 &app.machine_info,
                 app.machine_selected,
                 &app.machine_marked,
                 &app.machine_scrollbar_state,
             ),
-            Panel::User => (
+            (ConnectionMode::Local, Panel::User) => (
                 &app.user_paths,
                 &app.user_info,
                 app.user_selected,
                 &app.user_marked,
                 &app.user_scrollbar_state,
+            ),
+            (ConnectionMode::Remote, Panel::Machine) => (
+                &app.machine_paths,
+                &app.machine_info,
+                app.machine_selected,
+                &app.machine_marked,
+                &app.machine_scrollbar_state,
+            ),
+            (ConnectionMode::Remote, Panel::User) => (
+                &app.remote_machine_paths,
+                &app.remote_machine_info,
+                app.remote_machine_selected,
+                &app.remote_machine_marked,
+                &app.remote_scrollbar_state,
             ),
         };
 
@@ -190,9 +225,23 @@ impl UI {
             ])
             .split(area);
 
+        // Build panel title based on connection mode
+        let scope_label = match (app.connection_mode, panel) {
+            (ConnectionMode::Local, Panel::Machine) => "MACHINE".to_string(),
+            (ConnectionMode::Local, Panel::User) => "USER".to_string(),
+            (ConnectionMode::Remote, Panel::Machine) => "LOCAL MACHINE".to_string(),
+            (ConnectionMode::Remote, Panel::User) => {
+                if let Some(ref conn) = app.remote_connection {
+                    format!("REMOTE MACHINE ({})", conn.computer_name())
+                } else {
+                    "REMOTE MACHINE".to_string()
+                }
+            }
+        };
+
         let title = format!(
             " {} {} {}",
-            panel.scope().as_str(),
+            scope_label,
             if !app.is_admin && panel == Panel::Machine {
                 "[READ-ONLY]"
             } else {
@@ -567,6 +616,22 @@ impl UI {
                             .bg(app.theme.function_key_label_bg),
                     ));
                     hints_vec.push(Span::raw(" | "));
+                    // Show Ctrl+O hint when in remote mode
+                    if let Some(ref conn) = app.remote_connection {
+                        hints_vec.push(Span::styled(
+                            "Ctrl+O",
+                            Style::default()
+                                .fg(app.theme.function_key_number_fg)
+                                .bg(app.theme.function_key_number_bg),
+                        ));
+                        hints_vec.push(Span::styled(
+                            format!("Disconnect({})", conn.computer_name()),
+                            Style::default()
+                                .fg(app.theme.function_key_label_fg)
+                                .bg(app.theme.function_key_label_bg),
+                        ));
+                        hints_vec.push(Span::raw(" | "));
+                    }
                     hints_vec.push(Span::styled(
                         "Q",
                         Style::default()
@@ -713,6 +778,16 @@ impl UI {
             Line::from("  Ctrl+R          Restore from backup"),
             Line::from("  Ctrl+Z          Undo last operation"),
             Line::from("  Ctrl+Y          Redo last undone operation"),
+            Line::from(""),
+            Line::from(vec![Span::styled(
+                "Remote:",
+                Style::default()
+                    .fg(app.theme.help_bold_fg)
+                    .add_modifier(Modifier::BOLD),
+            )]),
+            Line::from("  Ctrl+O          Connect to/disconnect from"),
+            Line::from("                  remote computer"),
+            Line::from("  --remote NAME   Connect on startup"),
             Line::from(""),
             Line::from(vec![Span::styled(
                 "Color Legend:",
@@ -973,6 +1048,26 @@ impl UI {
                     Style::default().fg(app.theme.info_fg),
                 )]));
             }
+            ConfirmAction::DisconnectRemote => {
+                let computer_name = app
+                    .remote_connection
+                    .as_ref()
+                    .map(|c| c.computer_name())
+                    .unwrap_or("unknown");
+                message_lines.push(Line::from(vec![Span::styled(
+                    format!("Disconnect from remote computer '{}'?", computer_name),
+                    Style::default()
+                        .fg(app.theme.dialog_fg)
+                        .add_modifier(Modifier::BOLD),
+                )]));
+                if app.has_changes {
+                    message_lines.push(Line::from(""));
+                    message_lines.push(Line::from(vec![Span::styled(
+                        "Warning: Unsaved changes will be lost!",
+                        Style::default().fg(app.theme.warning_fg),
+                    )]));
+                }
+            }
         }
 
         message_lines.push(Line::from(""));
@@ -1025,6 +1120,7 @@ impl UI {
         let title = match input_mode {
             InputMode::AddPath => " Add Path ",
             InputMode::EditPath => " Edit Path ",
+            InputMode::ConnectRemote => " Connect to Remote Computer ",
         };
 
         let text = vec![

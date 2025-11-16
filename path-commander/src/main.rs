@@ -31,6 +31,10 @@ struct Args {
     /// Theme to use (built-in: default, dracula) or path to .ini skin file
     #[arg(short, long)]
     theme: Option<String>,
+
+    /// Connect to remote computer (hostname or IP address)
+    #[arg(short, long)]
+    remote: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -87,8 +91,21 @@ fn main() -> Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // Create app state
-    let mut app = App::new(theme)?;
+    // Create app state (with remote connection if specified)
+    let mut app = if let Some(remote) = args.remote {
+        match App::new_with_remote(theme, &remote) {
+            Ok(app) => app,
+            Err(e) => {
+                // Restore terminal before showing error
+                disable_raw_mode()?;
+                execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture)?;
+                eprintln!("Failed to connect to remote computer '{}': {:?}", remote, e);
+                std::process::exit(1);
+            }
+        }
+    } else {
+        App::new(theme)?
+    };
     let mut ui = UI::new();
 
     // Main loop
