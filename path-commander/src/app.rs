@@ -539,6 +539,16 @@ impl App {
                 self.unmark_all();
             }
 
+            (KeyCode::Char('e'), KeyModifiers::CONTROL)
+            | (KeyCode::Char('E'), KeyModifiers::CONTROL) => {
+                // Request elevation with Ctrl+E
+                if !self.is_admin {
+                    self.mode = Mode::Confirm(ConfirmAction::RequestElevation);
+                } else {
+                    self.set_status("Already running as administrator");
+                }
+            }
+
             _ => {}
         }
         Ok(())

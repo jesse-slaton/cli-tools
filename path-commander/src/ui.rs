@@ -320,17 +320,25 @@ impl UI {
     }
 
     fn render_status(&self, f: &mut Frame, area: Rect, app: &App) {
-        let mut status_spans = vec![
-            Span::styled(
-                if app.is_admin { "ADMIN " } else { "USER " },
-                Style::default().fg(if app.is_admin {
-                    app.theme.path_valid_fg
-                } else {
-                    app.theme.path_duplicate_fg
-                }),
-            ),
-            Span::raw("│ "),
-        ];
+        let mut status_spans = vec![];
+
+        // Show privilege level with helpful context
+        if app.is_admin {
+            status_spans.push(Span::styled(
+                "ADMIN ",
+                Style::default().fg(app.theme.path_valid_fg),
+            ));
+        } else {
+            status_spans.push(Span::styled(
+                "USER ",
+                Style::default().fg(app.theme.path_duplicate_fg),
+            ));
+            status_spans.push(Span::styled(
+                "(MACHINE read-only, press Ctrl+E to elevate)",
+                Style::default().fg(app.theme.path_duplicate_fg),
+            ));
+        }
+        status_spans.push(Span::raw(" │ "));
 
         // Add marked items count if any are marked
         let total_marked = app.machine_marked.len() + app.user_marked.len();
@@ -461,6 +469,22 @@ impl UI {
                             .bg(app.theme.function_key_label_bg),
                     ));
                     hints_vec.push(Span::raw(" | "));
+                    // Show Ctrl+E hint when not admin (filter active context)
+                    if !app.is_admin {
+                        hints_vec.push(Span::styled(
+                            "Ctrl+E",
+                            Style::default()
+                                .fg(app.theme.function_key_number_fg)
+                                .bg(app.theme.function_key_number_bg),
+                        ));
+                        hints_vec.push(Span::styled(
+                            "Elevate",
+                            Style::default()
+                                .fg(app.theme.function_key_label_fg)
+                                .bg(app.theme.function_key_label_bg),
+                        ));
+                        hints_vec.push(Span::raw(" | "));
+                    }
                     hints_vec.push(Span::styled(
                         "Q",
                         Style::default()
@@ -541,6 +565,22 @@ impl UI {
                             .bg(app.theme.function_key_label_bg),
                     ));
                     hints_vec.push(Span::raw(" | "));
+                    // Show Ctrl+E hint when not admin (marked items context)
+                    if !app.is_admin {
+                        hints_vec.push(Span::styled(
+                            "Ctrl+E",
+                            Style::default()
+                                .fg(app.theme.function_key_number_fg)
+                                .bg(app.theme.function_key_number_bg),
+                        ));
+                        hints_vec.push(Span::styled(
+                            "Elevate",
+                            Style::default()
+                                .fg(app.theme.function_key_label_fg)
+                                .bg(app.theme.function_key_label_bg),
+                        ));
+                        hints_vec.push(Span::raw(" | "));
+                    }
                     hints_vec.push(Span::styled(
                         "Q",
                         Style::default()
@@ -621,6 +661,22 @@ impl UI {
                             .bg(app.theme.function_key_label_bg),
                     ));
                     hints_vec.push(Span::raw(" | "));
+                    // Show Ctrl+E hint when not admin
+                    if !app.is_admin {
+                        hints_vec.push(Span::styled(
+                            "Ctrl+E",
+                            Style::default()
+                                .fg(app.theme.function_key_number_fg)
+                                .bg(app.theme.function_key_number_bg),
+                        ));
+                        hints_vec.push(Span::styled(
+                            "Elevate",
+                            Style::default()
+                                .fg(app.theme.function_key_label_fg)
+                                .bg(app.theme.function_key_label_bg),
+                        ));
+                        hints_vec.push(Span::raw(" | "));
+                    }
                     // Show Ctrl+O hint when in remote mode
                     if let Some(ref conn) = app.remote_connection {
                         hints_vec.push(Span::styled(
@@ -783,6 +839,27 @@ impl UI {
             Line::from("  Ctrl+R          Restore from backup"),
             Line::from("  Ctrl+Z          Undo last operation"),
             Line::from("  Ctrl+Y          Redo last undone operation"),
+            Line::from(""),
+            Line::from(vec![Span::styled(
+                "Privileges:",
+                Style::default()
+                    .fg(app.theme.help_bold_fg)
+                    .add_modifier(Modifier::BOLD),
+            )]),
+            Line::from("  Ctrl+E          Elevate to Administrator"),
+            Line::from(vec![
+                Span::raw("  "),
+                Span::styled(
+                    "USER mode:",
+                    Style::default().fg(app.theme.path_duplicate_fg),
+                ),
+                Span::raw(" MACHINE paths read-only"),
+            ]),
+            Line::from(vec![
+                Span::raw("  "),
+                Span::styled("ADMIN mode:", Style::default().fg(app.theme.path_valid_fg)),
+                Span::raw(" Full access to all paths"),
+            ]),
             Line::from(""),
             Line::from(vec![Span::styled(
                 "Remote:",
