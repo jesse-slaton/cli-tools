@@ -124,6 +124,64 @@ Path Commander has full mouse support for efficient navigation and editing:
 
 You can mix keyboard and mouse interactions seamlessly for maximum efficiency.
 
+## Theming
+
+Path Commander supports Midnight Commander (MC) .ini theme files, allowing you to customize the colors and appearance.
+
+### Using Themes
+
+```bash
+# Use a specific theme file
+pc --theme ~/.pc/themes/dracula.ini
+
+# Or load from themes/ directory in the project
+pc --theme themes/dracula-mc.ini
+
+# Use default theme (no flag needed)
+pc
+```
+
+### Theme Selector (Interactive)
+
+Press `t` while running Path Commander to open the theme selector, which shows:
+- All themes in `~/.pc/themes/`
+- Built-in themes
+- Live preview of colors
+- Current active theme
+
+### Finding MC Themes
+
+Path Commander is compatible with **any** Midnight Commander theme file. Popular sources:
+
+1. **Official Dracula Theme**
+   ```bash
+   curl -sL https://raw.githubusercontent.com/dracula/midnight-commander/master/skins/dracula256.ini -o ~/.pc/themes/dracula.ini
+   ```
+
+2. **MC Skins Collection**
+   Browse https://github.com/nkulikov/mc-skins or search GitHub for "midnight commander skins"
+
+3. **Create Your Own**
+   See `MC_COMPATIBILITY.md` for details on creating custom themes
+
+### Intelligent Color Mapping
+
+Path Commander automatically extracts colors from MC themes:
+- **Panel borders/scrollbars**: Uses `[dialog] dfocus` (typically purple in Dracula)
+- **Valid paths**: Uses `[filehighlight] directory` color
+- **Dead paths**: Uses `[error] _default_` color
+- **Duplicates**: Uses `[filehighlight] symlink` color
+
+This means unmodified MC themes (like the official Dracula theme) work perfectly without any Path Commander-specific modifications!
+
+### Custom Theme Directory
+
+Themes are stored in:
+- `~/.pc/themes/` (Linux/macOS/Windows with MSYS2/Git Bash)
+- `%USERPROFILE%\.pc\themes\` (Windows native paths)
+
+The directory is created automatically on first run.
+
 ## How It Works
 
 ### Path Analysis

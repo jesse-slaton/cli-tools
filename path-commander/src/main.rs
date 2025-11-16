@@ -1,5 +1,6 @@
 mod app;
 mod backup;
+mod config;
 mod path_analyzer;
 mod permissions;
 mod process_detector;
@@ -43,6 +44,10 @@ fn main() -> Result<()> {
     // Parse command-line arguments
     let args = Args::parse();
 
+    // Initialize config directories
+    config::ensure_config_dirs()?;
+    config::migrate_backups().ok(); // Don't fail if migration fails
+
     // Load theme
     let theme = if let Some(theme_name) = args.theme {
         // Check if it's a file path
@@ -50,8 +55,13 @@ fn main() -> Result<()> {
         if path.exists() {
             Theme::from_mc_skin(&path)?
         } else {
-            // Try loading as built-in theme
-            Theme::builtin(&theme_name)?
+            // Try loading from custom themes directory
+            if let Some(custom_path) = config::get_theme_path(&theme_name) {
+                Theme::from_mc_skin(&custom_path)?
+            } else {
+                // Try loading as built-in theme
+                Theme::builtin(&theme_name)?
+            }
         }
     } else {
         Theme::default()

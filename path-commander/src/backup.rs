@@ -82,13 +82,18 @@ impl PathBackup {
 }
 
 /// Get the default backup directory
+///
+/// Returns ~/.pc/backups/ (or ~/.pathcommand/backups/ as fallback)
 pub fn get_default_backup_dir() -> PathBuf {
-    let mut path = dirs::data_local_dir()
-        .or_else(|| std::env::current_dir().ok())
-        .unwrap_or_else(|| PathBuf::from("."));
-    path.push("PathCommander");
-    path.push("backups");
-    path
+    crate::config::get_backups_dir().unwrap_or_else(|_| {
+        // Fallback to old location if config directory can't be determined
+        let mut path = dirs::data_local_dir()
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| PathBuf::from("."));
+        path.push("PathCommander");
+        path.push("backups");
+        path
+    })
 }
 
 /// List all backup files in a directory
@@ -386,8 +391,14 @@ mod tests {
     #[test]
     fn test_get_default_backup_dir() {
         let dir = get_default_backup_dir();
-        assert!(dir.to_string_lossy().contains("PathCommander"));
-        assert!(dir.to_string_lossy().contains("backups"));
+        let path_str = dir.to_string_lossy();
+        // Should use new ~/.pc/backups/ location (or fallback)
+        assert!(
+            path_str.contains(".pc")
+                || path_str.contains(".pathcommand")
+                || path_str.contains("PathCommander")
+        ); // Fallback
+        assert!(path_str.contains("backups"));
     }
 
     #[test]

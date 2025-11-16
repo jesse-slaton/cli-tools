@@ -8,6 +8,7 @@ use ratatui::{
 
 use crate::app::{App, ConfirmAction, InputMode, Mode, Panel};
 use crate::path_analyzer::PathStatus;
+use crate::theme::Theme;
 
 pub struct UI;
 
@@ -23,6 +24,7 @@ impl UI {
             Mode::BackupList => self.render_backup_list(f, app),
             Mode::ProcessRestartInfo => self.render_process_restart_info(f, app),
             Mode::FilterMenu => self.render_filter_menu(f, app),
+            Mode::ThemeSelection => self.render_theme_selection(f, app),
             _ => self.render_main(f, app),
         }
     }
@@ -120,7 +122,7 @@ impl UI {
             second_line_spans.push(Span::styled(
                 filter_text,
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(app.theme.filter_indicator_fg)
                     .add_modifier(Modifier::BOLD),
             ));
         }
@@ -208,7 +210,7 @@ impl UI {
                 .fg(app.theme.panel_border_fg)
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(Color::DarkGray)
+            Style::default().fg(app.theme.panel_border_fg)
         };
 
         let block = Block::default()
@@ -230,20 +232,22 @@ impl UI {
                 let checkbox = if is_marked { "[X] " } else { "[ ] " };
                 let display = format!("{}{}", checkbox, path);
 
-                let mut style = Style::default().fg(color);
-                if is_selected {
-                    style = style.add_modifier(Modifier::REVERSED);
-                }
+                let style = if is_selected {
+                    // Use theme colors for selection
+                    Style::default()
+                        .fg(app.theme.panel_selected_fg)
+                        .bg(app.theme.panel_selected_bg)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    // Use status color for normal items
+                    Style::default().fg(color).bg(app.theme.panel_normal_bg)
+                };
 
                 ListItem::new(display).style(style)
             })
             .collect();
 
-        let list = List::new(items).block(block).highlight_style(
-            Style::default()
-                .add_modifier(Modifier::REVERSED)
-                .add_modifier(Modifier::BOLD),
-        );
+        let list = List::new(items).block(block);
 
         f.render_widget(list, chunks[0]);
 
@@ -253,12 +257,8 @@ impl UI {
             .end_symbol(Some("↓"))
             .track_symbol(Some("│"))
             .thumb_symbol("█")
-            .thumb_style(if is_active {
-                Style::default().fg(app.theme.panel_border_fg)
-            } else {
-                Style::default().fg(Color::Gray)
-            })
-            .track_style(Style::default().fg(Color::DarkGray));
+            .thumb_style(Style::default().fg(app.theme.scrollbar_thumb_fg))
+            .track_style(Style::default().fg(app.theme.scrollbar_fg));
 
         // Clone state for rendering (render_stateful_widget needs &mut)
         let mut scrollbar_state_mut = *scrollbar_state;
@@ -283,7 +283,7 @@ impl UI {
         if total_marked > 0 {
             status_spans.push(Span::styled(
                 format!("{} marked", total_marked),
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(app.theme.panel_marked_fg),
             ));
             status_spans.push(Span::raw(" │ "));
         }
@@ -302,6 +302,25 @@ impl UI {
         f.render_widget(status, area);
     }
 
+    /// Helper to create MC-style function key display (e.g., "3View" instead of "F3 View")
+    /// Returns spans for the key number and label
+    fn mc_function_key(&self, key_num: &str, label: &str, theme: &Theme) -> Vec<Span<'static>> {
+        vec![
+            Span::styled(
+                key_num.to_string(),
+                Style::default()
+                    .fg(theme.function_key_number_fg)
+                    .bg(theme.function_key_number_bg),
+            ),
+            Span::styled(
+                label.to_string(),
+                Style::default()
+                    .fg(theme.function_key_label_fg)
+                    .bg(theme.function_key_label_bg),
+            ),
+        ]
+    }
+
     fn render_key_hints(&self, f: &mut Frame, area: Rect, app: &App) {
         let hints = match app.mode {
             Mode::Normal => {
@@ -314,112 +333,268 @@ impl UI {
                 // Context-sensitive hints based on application state
                 if filter_active {
                     // When filter is active - show filter-related operations
-                    let mut hints_vec = vec![
-                        Span::styled("F1", Style::default().fg(app.theme.header_fg)),
-                        Span::raw(" Help │ "),
-                        Span::styled("/", Style::default().fg(app.theme.header_fg)),
-                        Span::raw(" Clear Filter │ "),
-                        Span::styled("Ctrl+A", Style::default().fg(app.theme.header_fg)),
-                        Span::raw(" Mark All │ "),
-                        Span::styled("F3", Style::default().fg(app.theme.header_fg)),
-                        Span::raw(" Del │ "),
-                    ];
+                    let mut hints_vec = Vec::new();
+                    hints_vec.extend(self.mc_function_key("1", "Help", &app.theme));
+                    hints_vec.push(Span::raw(" | "));
+                    hints_vec.push(Span::styled(
+                        "/",
+                        Style::default()
+                            .fg(app.theme.function_key_number_fg)
+                            .bg(app.theme.function_key_number_bg),
+                    ));
+                    hints_vec.push(Span::styled(
+                        "Clear Filter",
+                        Style::default()
+                            .fg(app.theme.function_key_label_fg)
+                            .bg(app.theme.function_key_label_bg),
+                    ));
+                    hints_vec.push(Span::raw(" | "));
+                    hints_vec.push(Span::styled(
+                        "Ctrl+A",
+                        Style::default()
+                            .fg(app.theme.function_key_number_fg)
+                            .bg(app.theme.function_key_number_bg),
+                    ));
+                    hints_vec.push(Span::styled(
+                        "Mark All",
+                        Style::default()
+                            .fg(app.theme.function_key_label_fg)
+                            .bg(app.theme.function_key_label_bg),
+                    ));
+                    hints_vec.push(Span::raw(" | "));
+                    hints_vec.extend(self.mc_function_key("3", "Del", &app.theme));
+                    hints_vec.push(Span::raw(" | "));
                     if app.can_undo() {
                         hints_vec.push(Span::styled(
                             "Ctrl+Z",
-                            Style::default().fg(app.theme.header_fg),
+                            Style::default()
+                                .fg(app.theme.function_key_number_fg)
+                                .bg(app.theme.function_key_number_bg),
                         ));
-                        hints_vec.push(Span::raw(" Undo │ "));
+                        hints_vec.push(Span::styled(
+                            "Undo",
+                            Style::default()
+                                .fg(app.theme.function_key_label_fg)
+                                .bg(app.theme.function_key_label_bg),
+                        ));
+                        hints_vec.push(Span::raw(" | "));
                     }
                     if app.can_redo() {
                         hints_vec.push(Span::styled(
                             "Ctrl+Y",
-                            Style::default().fg(app.theme.header_fg),
+                            Style::default()
+                                .fg(app.theme.function_key_number_fg)
+                                .bg(app.theme.function_key_number_bg),
                         ));
-                        hints_vec.push(Span::raw(" Redo │ "));
+                        hints_vec.push(Span::styled(
+                            "Redo",
+                            Style::default()
+                                .fg(app.theme.function_key_label_fg)
+                                .bg(app.theme.function_key_label_bg),
+                        ));
+                        hints_vec.push(Span::raw(" | "));
                     }
-                    hints_vec.extend(vec![
-                        Span::styled("Ctrl+S", Style::default().fg(app.theme.header_fg)),
-                        Span::raw(" Save │ "),
-                        Span::styled("Q", Style::default().fg(app.theme.header_fg)),
-                        Span::raw(" Quit"),
-                    ]);
+                    hints_vec.push(Span::styled(
+                        "Ctrl+S",
+                        Style::default()
+                            .fg(app.theme.function_key_number_fg)
+                            .bg(app.theme.function_key_number_bg),
+                    ));
+                    hints_vec.push(Span::styled(
+                        "Save",
+                        Style::default()
+                            .fg(app.theme.function_key_label_fg)
+                            .bg(app.theme.function_key_label_bg),
+                    ));
+                    hints_vec.push(Span::raw(" | "));
+                    hints_vec.push(Span::styled(
+                        "Q",
+                        Style::default()
+                            .fg(app.theme.function_key_number_fg)
+                            .bg(app.theme.function_key_number_bg),
+                    ));
+                    hints_vec.push(Span::styled(
+                        "Quit",
+                        Style::default()
+                            .fg(app.theme.function_key_label_fg)
+                            .bg(app.theme.function_key_label_bg),
+                    ));
                     hints_vec
                 } else if total_marked > 0 {
                     // When items are marked - show bulk operations
-                    let mut hints_vec = vec![
-                        Span::styled("F1", Style::default().fg(app.theme.header_fg)),
-                        Span::raw(" Help │ "),
-                        Span::styled("F3", Style::default().fg(app.theme.header_fg)),
-                        Span::raw(" Delete │ "),
-                        Span::styled("F5", Style::default().fg(app.theme.header_fg)),
-                        Span::raw(" Move │ "),
-                        Span::styled("F9", Style::default().fg(app.theme.header_fg)),
-                        Span::raw(" Normalize │ "),
-                    ];
+                    let mut hints_vec = Vec::new();
+                    hints_vec.extend(self.mc_function_key("1", "Help", &app.theme));
+                    hints_vec.push(Span::raw(" | "));
+                    hints_vec.extend(self.mc_function_key("3", "Delete", &app.theme));
+                    hints_vec.push(Span::raw(" | "));
+                    hints_vec.extend(self.mc_function_key("5", "Move", &app.theme));
+                    hints_vec.push(Span::raw(" | "));
+                    hints_vec.extend(self.mc_function_key("9", "Normalize", &app.theme));
+                    hints_vec.push(Span::raw(" | "));
                     if app.can_undo() {
                         hints_vec.push(Span::styled(
                             "Ctrl+Z",
-                            Style::default().fg(app.theme.header_fg),
+                            Style::default()
+                                .fg(app.theme.function_key_number_fg)
+                                .bg(app.theme.function_key_number_bg),
                         ));
-                        hints_vec.push(Span::raw(" Undo │ "));
+                        hints_vec.push(Span::styled(
+                            "Undo",
+                            Style::default()
+                                .fg(app.theme.function_key_label_fg)
+                                .bg(app.theme.function_key_label_bg),
+                        ));
+                        hints_vec.push(Span::raw(" | "));
                     }
                     if app.can_redo() {
                         hints_vec.push(Span::styled(
                             "Ctrl+Y",
-                            Style::default().fg(app.theme.header_fg),
+                            Style::default()
+                                .fg(app.theme.function_key_number_fg)
+                                .bg(app.theme.function_key_number_bg),
                         ));
-                        hints_vec.push(Span::raw(" Redo │ "));
+                        hints_vec.push(Span::styled(
+                            "Redo",
+                            Style::default()
+                                .fg(app.theme.function_key_label_fg)
+                                .bg(app.theme.function_key_label_bg),
+                        ));
+                        hints_vec.push(Span::raw(" | "));
                     }
-                    hints_vec.extend(vec![
-                        Span::styled("Ctrl+Shift+U", Style::default().fg(app.theme.header_fg)),
-                        Span::raw(" Unmark All │ "),
-                        Span::styled("Ctrl+S", Style::default().fg(app.theme.header_fg)),
-                        Span::raw(" Save │ "),
-                        Span::styled("Q", Style::default().fg(app.theme.header_fg)),
-                        Span::raw(" Quit"),
-                    ]);
+                    hints_vec.push(Span::styled(
+                        "Ctrl+Shift+U",
+                        Style::default()
+                            .fg(app.theme.function_key_number_fg)
+                            .bg(app.theme.function_key_number_bg),
+                    ));
+                    hints_vec.push(Span::styled(
+                        "Unmark All",
+                        Style::default()
+                            .fg(app.theme.function_key_label_fg)
+                            .bg(app.theme.function_key_label_bg),
+                    ));
+                    hints_vec.push(Span::raw(" | "));
+                    hints_vec.push(Span::styled(
+                        "Ctrl+S",
+                        Style::default()
+                            .fg(app.theme.function_key_number_fg)
+                            .bg(app.theme.function_key_number_bg),
+                    ));
+                    hints_vec.push(Span::styled(
+                        "Save",
+                        Style::default()
+                            .fg(app.theme.function_key_label_fg)
+                            .bg(app.theme.function_key_label_bg),
+                    ));
+                    hints_vec.push(Span::raw(" | "));
+                    hints_vec.push(Span::styled(
+                        "Q",
+                        Style::default()
+                            .fg(app.theme.function_key_number_fg)
+                            .bg(app.theme.function_key_number_bg),
+                    ));
+                    hints_vec.push(Span::styled(
+                        "Quit",
+                        Style::default()
+                            .fg(app.theme.function_key_label_fg)
+                            .bg(app.theme.function_key_label_bg),
+                    ));
                     hints_vec
                 } else {
                     // Normal mode - default hints with more discoverable features
-                    let mut hints_vec = vec![
-                        Span::styled("F1", Style::default().fg(app.theme.header_fg)),
-                        Span::raw(" Help │ "),
-                        Span::styled("F2", Style::default().fg(app.theme.header_fg)),
-                        Span::raw(" Mark │ "),
-                        Span::styled("F3", Style::default().fg(app.theme.header_fg)),
-                        Span::raw(" Del │ "),
-                        Span::styled("F4", Style::default().fg(app.theme.header_fg)),
-                        Span::raw(" Add │ "),
-                        Span::styled("/", Style::default().fg(app.theme.header_fg)),
-                        Span::raw(" Filter │ "),
-                    ];
+                    let mut hints_vec = Vec::new();
+                    hints_vec.extend(self.mc_function_key("1", "Help", &app.theme));
+                    hints_vec.push(Span::raw(" | "));
+                    hints_vec.extend(self.mc_function_key("2", "Mark", &app.theme));
+                    hints_vec.push(Span::raw(" | "));
+                    hints_vec.extend(self.mc_function_key("3", "Del", &app.theme));
+                    hints_vec.push(Span::raw(" | "));
+                    hints_vec.extend(self.mc_function_key("4", "Add", &app.theme));
+                    hints_vec.push(Span::raw(" | "));
+                    hints_vec.push(Span::styled(
+                        "/",
+                        Style::default()
+                            .fg(app.theme.function_key_number_fg)
+                            .bg(app.theme.function_key_number_bg),
+                    ));
+                    hints_vec.push(Span::styled(
+                        "Filter",
+                        Style::default()
+                            .fg(app.theme.function_key_label_fg)
+                            .bg(app.theme.function_key_label_bg),
+                    ));
+                    hints_vec.push(Span::raw(" | "));
                     if app.can_undo() {
                         hints_vec.push(Span::styled(
                             "Ctrl+Z",
-                            Style::default().fg(app.theme.header_fg),
+                            Style::default()
+                                .fg(app.theme.function_key_number_fg)
+                                .bg(app.theme.function_key_number_bg),
                         ));
-                        hints_vec.push(Span::raw(" Undo │ "));
+                        hints_vec.push(Span::styled(
+                            "Undo",
+                            Style::default()
+                                .fg(app.theme.function_key_label_fg)
+                                .bg(app.theme.function_key_label_bg),
+                        ));
+                        hints_vec.push(Span::raw(" | "));
                     }
                     if app.can_redo() {
                         hints_vec.push(Span::styled(
                             "Ctrl+Y",
-                            Style::default().fg(app.theme.header_fg),
+                            Style::default()
+                                .fg(app.theme.function_key_number_fg)
+                                .bg(app.theme.function_key_number_bg),
                         ));
-                        hints_vec.push(Span::raw(" Redo │ "));
+                        hints_vec.push(Span::styled(
+                            "Redo",
+                            Style::default()
+                                .fg(app.theme.function_key_label_fg)
+                                .bg(app.theme.function_key_label_bg),
+                        ));
+                        hints_vec.push(Span::raw(" | "));
                     }
-                    hints_vec.extend(vec![
-                        Span::styled("Ctrl+S", Style::default().fg(app.theme.header_fg)),
-                        Span::raw(" Save │ "),
-                        Span::styled("Q", Style::default().fg(app.theme.header_fg)),
-                        Span::raw(" Quit"),
-                    ]);
+                    hints_vec.push(Span::styled(
+                        "Ctrl+S",
+                        Style::default()
+                            .fg(app.theme.function_key_number_fg)
+                            .bg(app.theme.function_key_number_bg),
+                    ));
+                    hints_vec.push(Span::styled(
+                        "Save",
+                        Style::default()
+                            .fg(app.theme.function_key_label_fg)
+                            .bg(app.theme.function_key_label_bg),
+                    ));
+                    hints_vec.push(Span::raw(" | "));
+                    hints_vec.push(Span::styled(
+                        "Q",
+                        Style::default()
+                            .fg(app.theme.function_key_number_fg)
+                            .bg(app.theme.function_key_number_bg),
+                    ));
+                    hints_vec.push(Span::styled(
+                        "Quit",
+                        Style::default()
+                            .fg(app.theme.function_key_label_fg)
+                            .bg(app.theme.function_key_label_bg),
+                    ));
                     hints_vec
                 }
             }
             _ => vec![
-                Span::styled("ESC", Style::default().fg(app.theme.header_fg)),
-                Span::raw(" Cancel"),
+                Span::styled(
+                    "ESC",
+                    Style::default()
+                        .fg(app.theme.function_key_number_fg)
+                        .bg(app.theme.function_key_number_bg),
+                ),
+                Span::styled(
+                    "Cancel",
+                    Style::default()
+                        .fg(app.theme.function_key_label_fg)
+                        .bg(app.theme.function_key_label_bg),
+                ),
             ],
         };
 
@@ -441,7 +616,7 @@ impl UI {
             .title(vec![Span::styled(
                 " Path Commander - Help ",
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(app.theme.dialog_title_fg)
                     .add_modifier(Modifier::BOLD),
             )]);
 
@@ -461,7 +636,9 @@ impl UI {
         let left_text = vec![
             Line::from(vec![Span::styled(
                 "Navigation:",
-                Style::default().add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(app.theme.help_bold_fg)
+                    .add_modifier(Modifier::BOLD),
             )]),
             Line::from("  ↑/↓, j/k        Move selection up/down"),
             Line::from("  PgUp/PgDn       Move selection by 10"),
@@ -470,7 +647,9 @@ impl UI {
             Line::from(""),
             Line::from(vec![Span::styled(
                 "Selection:",
-                Style::default().add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(app.theme.help_bold_fg)
+                    .add_modifier(Modifier::BOLD),
             )]),
             Line::from("  Space, Insert   Toggle mark on current"),
             Line::from("  F2              Toggle mark (MC style)"),
@@ -483,7 +662,9 @@ impl UI {
             Line::from(""),
             Line::from(vec![Span::styled(
                 "Filtering:",
-                Style::default().add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(app.theme.help_bold_fg)
+                    .add_modifier(Modifier::BOLD),
             )]),
             Line::from("  /               Open filter menu"),
             Line::from("                  • Clear filter (show all)"),
@@ -491,13 +672,25 @@ impl UI {
             Line::from("                  • Duplicates"),
             Line::from("                  • Non-normalized paths"),
             Line::from("                  • Valid paths only"),
+            Line::from(""),
+            Line::from(vec![Span::styled(
+                "Appearance:",
+                Style::default()
+                    .fg(app.theme.help_bold_fg)
+                    .add_modifier(Modifier::BOLD),
+            )]),
+            Line::from("  t               Choose color theme"),
+            Line::from("                  • Dracula, Classic MC, Monokai"),
+            Line::from("                  • Load custom themes from ~/.pc/themes/"),
         ];
 
         // Right column content
         let right_text = vec![
             Line::from(vec![Span::styled(
                 "Actions:",
-                Style::default().add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(app.theme.help_bold_fg)
+                    .add_modifier(Modifier::BOLD),
             )]),
             Line::from("  F3, Delete      Delete marked items"),
             Line::from("  F4              Add new path"),
@@ -511,7 +704,9 @@ impl UI {
             Line::from(""),
             Line::from(vec![Span::styled(
                 "Save/Restore:",
-                Style::default().add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(app.theme.help_bold_fg)
+                    .add_modifier(Modifier::BOLD),
             )]),
             Line::from("  Ctrl+S          Apply changes to registry"),
             Line::from("  Ctrl+B          Create backup"),
@@ -521,26 +716,28 @@ impl UI {
             Line::from(""),
             Line::from(vec![Span::styled(
                 "Color Legend:",
-                Style::default().add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(app.theme.help_bold_fg)
+                    .add_modifier(Modifier::BOLD),
             )]),
             Line::from(vec![
                 Span::raw("  "),
-                Span::styled("Red", Style::default().fg(Color::Red)),
+                Span::styled("Red", Style::default().fg(app.theme.path_dead_fg)),
                 Span::raw(" - Dead path (doesn't exist)"),
             ]),
             Line::from(vec![
                 Span::raw("  "),
-                Span::styled("Yellow", Style::default().fg(Color::Yellow)),
+                Span::styled("Yellow", Style::default().fg(app.theme.path_duplicate_fg)),
                 Span::raw(" - Duplicate path"),
             ]),
             Line::from(vec![
                 Span::raw("  "),
-                Span::styled("Cyan", Style::default().fg(Color::Cyan)),
+                Span::styled("Cyan", Style::default().fg(app.theme.path_nonnormalized_fg)),
                 Span::raw(" - Non-normalized"),
             ]),
             Line::from(vec![
                 Span::raw("  "),
-                Span::styled("Green", Style::default().fg(Color::Green)),
+                Span::styled("Green", Style::default().fg(app.theme.path_valid_fg)),
                 Span::raw(" - Valid, unique, normalized"),
             ]),
         ];
@@ -568,7 +765,7 @@ impl UI {
 
         let footer = Paragraph::new(Line::from(vec![Span::styled(
             "Press ESC or F1 to close this help",
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(app.theme.warning_fg),
         )]))
         .alignment(Alignment::Center);
 
@@ -580,14 +777,14 @@ impl UI {
             Line::from(vec![Span::styled(
                 "PATH Changes Applied Successfully!",
                 Style::default()
-                    .fg(Color::Green)
+                    .fg(app.theme.success_fg)
                     .add_modifier(Modifier::BOLD),
             )]),
             Line::from(""),
             Line::from(vec![Span::styled(
                 "Important: Some running processes need to be restarted",
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(app.theme.warning_fg)
                     .add_modifier(Modifier::BOLD),
             )]),
             Line::from(""),
@@ -599,7 +796,7 @@ impl UI {
         for process in &app.processes_to_restart {
             lines.push(Line::from(vec![
                 Span::raw("  • "),
-                Span::styled(process, Style::default().fg(Color::Cyan)),
+                Span::styled(process, Style::default().fg(app.theme.info_fg)),
             ]));
         }
 
@@ -620,7 +817,7 @@ impl UI {
             Span::styled(
                 "Note: ",
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(app.theme.warning_fg)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw("New processes started after this point will see the updated PATH."),
@@ -628,7 +825,7 @@ impl UI {
         lines.push(Line::from(""));
         lines.push(Line::from(vec![Span::styled(
             "Press ENTER or ESC to continue",
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(app.theme.warning_fg),
         )]));
 
         let info = Paragraph::new(lines)
@@ -715,7 +912,7 @@ impl UI {
                 };
                 message_lines.push(Line::from(vec![Span::styled(
                     scope_text,
-                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(app.theme.warning_fg),
                 )]));
             }
             ConfirmAction::RestoreBackup => {
@@ -748,7 +945,7 @@ impl UI {
                 message_lines.push(Line::from(""));
                 message_lines.push(Line::from(vec![Span::styled(
                     "(Network paths and invalid paths will be skipped)",
-                    Style::default().fg(Color::Gray),
+                    Style::default().fg(app.theme.info_fg),
                 )]));
             }
         }
@@ -789,7 +986,7 @@ impl UI {
             Line::from(""),
             Line::from(vec![Span::styled(
                 "Enter to confirm, ESC to cancel",
-                Style::default().fg(Color::Gray),
+                Style::default().fg(app.theme.info_fg),
             )]),
         ];
 
@@ -819,27 +1016,27 @@ impl UI {
                     .and_then(|n| n.to_str())
                     .unwrap_or("Unknown");
 
-                let mut style = Style::default();
-                if is_selected {
-                    style = style.add_modifier(Modifier::REVERSED);
-                }
+                let style = if is_selected {
+                    Style::default()
+                        .fg(app.theme.panel_selected_fg)
+                        .bg(app.theme.panel_selected_bg)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                        .fg(app.theme.dialog_fg)
+                        .bg(app.theme.dialog_bg)
+                };
 
                 ListItem::new(filename).style(style)
             })
             .collect();
 
-        let list = List::new(items)
-            .block(
-                Block::default()
-                    .title(" Select Backup to Restore ")
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Cyan)),
-            )
-            .highlight_style(
-                Style::default()
-                    .add_modifier(Modifier::REVERSED)
-                    .add_modifier(Modifier::BOLD),
-            );
+        let list = List::new(items).block(
+            Block::default()
+                .title(" Select Backup to Restore ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(app.theme.dialog_border_fg)),
+        );
 
         let area = centered_rect(70, 50, f.area());
         f.render_widget(ratatui::widgets::Clear, area);
@@ -885,34 +1082,136 @@ impl UI {
                 let current_marker = if is_current { " [ACTIVE]" } else { "" };
                 let display = format!("{}{}\n  {}", name, current_marker, description);
 
-                let mut style = Style::default();
-                if is_current {
-                    style = style.fg(Color::Cyan);
-                }
-                if is_selected {
-                    style = style.add_modifier(Modifier::REVERSED);
-                }
+                let style = if is_selected {
+                    Style::default()
+                        .fg(app.theme.panel_selected_fg)
+                        .bg(app.theme.panel_selected_bg)
+                        .add_modifier(Modifier::BOLD)
+                } else if is_current {
+                    Style::default()
+                        .fg(app.theme.filter_indicator_fg)
+                        .bg(app.theme.dialog_bg)
+                } else {
+                    Style::default()
+                        .fg(app.theme.dialog_fg)
+                        .bg(app.theme.dialog_bg)
+                };
 
                 ListItem::new(display).style(style)
             })
             .collect();
 
-        let list = List::new(items)
-            .block(
-                Block::default()
-                    .title(" Filter Paths ")
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Cyan)),
-            )
-            .highlight_style(
-                Style::default()
-                    .add_modifier(Modifier::REVERSED)
-                    .add_modifier(Modifier::BOLD),
-            );
+        let list = List::new(items).block(
+            Block::default()
+                .title(" Filter Paths ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(app.theme.dialog_border_fg)),
+        );
 
         let area = centered_rect(60, 60, f.area());
         f.render_widget(ratatui::widgets::Clear, area);
         f.render_widget(list, area);
+    }
+
+    fn render_theme_selection(&self, f: &mut Frame, app: &App) {
+        let items: Vec<ListItem> = app
+            .theme_list
+            .iter()
+            .enumerate()
+            .map(|(idx, (name, is_builtin))| {
+                let is_selected = idx == app.theme_selected;
+                let is_current = name == &app.theme.name;
+
+                // Add indicators
+                let builtin_marker = if *is_builtin {
+                    " [Built-in]"
+                } else {
+                    " [Custom]"
+                };
+                let current_marker = if is_current { " [ACTIVE]" } else { "" };
+                let display = format!("{}{}{}", name, current_marker, builtin_marker);
+
+                let style = if is_selected {
+                    Style::default()
+                        .fg(app.theme.panel_selected_fg)
+                        .bg(app.theme.panel_selected_bg)
+                        .add_modifier(Modifier::BOLD)
+                } else if is_current {
+                    Style::default()
+                        .fg(app.theme.filter_indicator_fg)
+                        .bg(app.theme.dialog_bg)
+                } else {
+                    Style::default()
+                        .fg(app.theme.dialog_fg)
+                        .bg(app.theme.dialog_bg)
+                };
+
+                ListItem::new(display).style(style)
+            })
+            .collect();
+
+        let list = List::new(items).block(
+            Block::default()
+                .title(" Select Theme ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(app.theme.dialog_border_fg)),
+        );
+
+        // Add preview at the bottom
+        let area = centered_rect(70, 70, f.area());
+        f.render_widget(ratatui::widgets::Clear, area);
+
+        // Split area for list and preview
+        let chunks = Layout::default()
+            .direction(ratatui::layout::Direction::Vertical)
+            .constraints([
+                Constraint::Min(10),   // Theme list
+                Constraint::Length(8), // Preview
+            ])
+            .split(area);
+
+        f.render_widget(list, chunks[0]);
+
+        // Render preview
+        let preview_lines = vec![
+            Line::from(vec![Span::styled(
+                "Preview:",
+                Style::default()
+                    .fg(app.theme.help_bold_fg)
+                    .add_modifier(Modifier::BOLD),
+            )]),
+            Line::from(vec![
+                Span::raw("  "),
+                Span::styled("Valid", Style::default().fg(app.theme.path_valid_fg)),
+                Span::raw(" • "),
+                Span::styled("Dead", Style::default().fg(app.theme.path_dead_fg)),
+                Span::raw(" • "),
+                Span::styled(
+                    "Duplicate",
+                    Style::default().fg(app.theme.path_duplicate_fg),
+                ),
+                Span::raw(" • "),
+                Span::styled(
+                    "Non-norm",
+                    Style::default().fg(app.theme.path_nonnormalized_fg),
+                ),
+            ]),
+            Line::from(""),
+            Line::from(vec![Span::styled(
+                "↑↓/jk Navigate  Enter Select  Esc Cancel  r Reload",
+                Style::default().fg(app.theme.info_fg),
+            )]),
+        ];
+
+        let preview = Paragraph::new(preview_lines)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(app.theme.dialog_border_fg)),
+            )
+            .alignment(Alignment::Left);
+
+        f.render_widget(preview, chunks[1]);
     }
 
     fn get_status_color(&self, status: PathStatus, theme: &crate::theme::Theme) -> Color {
