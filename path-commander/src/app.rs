@@ -69,6 +69,47 @@ pub enum FilterMode {
     Valid,
 }
 
+/// Represents an undoable operation with enough data to reverse it
+#[derive(Debug, Clone)]
+pub enum Operation {
+    /// Delete operations - stores deleted items with their original indices
+    DeletePaths {
+        panel: Panel,
+        deleted: Vec<(usize, String)>, // (index, path) pairs in original order
+    },
+    /// Add operation - stores panel and index where path was added
+    AddPath {
+        panel: Panel,
+        index: usize,
+        path: String,
+    },
+    /// Edit operation - stores old and new values
+    EditPath {
+        panel: Panel,
+        index: usize,
+        old_path: String,
+        new_path: String,
+    },
+    /// Swap operation (move up/down)
+    SwapPaths {
+        panel: Panel,
+        index1: usize,
+        index2: usize,
+    },
+    /// Move paths from one panel to another
+    MovePaths {
+        from_panel: Panel,
+        #[allow(dead_code)]
+        to_panel: Panel,
+        paths_with_indices: Vec<(usize, String)>, // Original indices in from_panel
+    },
+    /// Normalize paths - stores changes made
+    NormalizePaths {
+        panel: Panel,
+        changes: Vec<(usize, String, String)>, // (index, old_path, new_path)
+    },
+}
+
 pub struct App {
     pub machine_paths: Vec<String>,
     pub user_paths: Vec<String>,
@@ -97,6 +138,8 @@ pub struct App {
     pub theme: Theme,                      // Color theme for UI rendering
     pub filter_mode: FilterMode,           // Current filter mode (None, Dead, Duplicates, etc.)
     pub filter_menu_selected: usize,       // Selected item in filter menu (0-4)
+    pub undo_stack: Vec<Operation>,        // Stack of undoable operations
+    pub redo_stack: Vec<Operation>,        // Stack of redoable operations
     last_click_time: std::time::Instant,   // Time of last mouse click for double-click detection
     last_click_pos: (Panel, usize),        // Panel and row of last click
 }
@@ -144,6 +187,8 @@ impl App {
             theme,
             filter_mode: FilterMode::None,
             filter_menu_selected: 0,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
             last_click_time: std::time::Instant::now(),
             last_click_pos: (Panel::Machine, 0),
         })
@@ -254,6 +299,10 @@ impl App {
                 }
             }
             (KeyCode::Char('b'), KeyModifiers::CONTROL) => self.create_backup()?,
+
+            // Undo/Redo
+            (KeyCode::Char('z'), KeyModifiers::CONTROL) => self.undo()?,
+            (KeyCode::Char('y'), KeyModifiers::CONTROL) => self.redo()?,
             (KeyCode::Char('r'), KeyModifiers::CONTROL) => self.show_backup_list()?,
 
             // Bulk selection commands
@@ -872,6 +921,14 @@ impl App {
     fn delete_marked(&mut self) -> Result<()> {
         let mut deleted_count = 0;
 
+        // Record machine deletions for undo
+        let mut machine_deleted = Vec::new();
+        for (idx, path) in self.machine_paths.iter().enumerate() {
+            if self.machine_marked.contains(&idx) {
+                machine_deleted.push((idx, path.clone()));
+            }
+        }
+
         // Delete from machine paths
         let mut new_machine = Vec::new();
         for (idx, path) in self.machine_paths.iter().enumerate() {
@@ -883,6 +940,14 @@ impl App {
         }
         self.machine_paths = new_machine;
         self.machine_marked.clear();
+
+        // Record user deletions for undo
+        let mut user_deleted = Vec::new();
+        for (idx, path) in self.user_paths.iter().enumerate() {
+            if self.user_marked.contains(&idx) {
+                user_deleted.push((idx, path.clone()));
+            }
+        }
 
         // Delete from user paths
         let mut new_user = Vec::new();
@@ -896,6 +961,21 @@ impl App {
         self.user_paths = new_user;
         self.user_marked.clear();
 
+        // Clear redo stack and record undo operations
+        self.clear_redo_stack();
+        if !machine_deleted.is_empty() {
+            self.undo_stack.push(Operation::DeletePaths {
+                panel: Panel::Machine,
+                deleted: machine_deleted,
+            });
+        }
+        if !user_deleted.is_empty() {
+            self.undo_stack.push(Operation::DeletePaths {
+                panel: Panel::User,
+                deleted: user_deleted,
+            });
+        }
+
         self.reanalyze();
         self.has_changes = true;
         self.set_status(&format!("Deleted {} path(s)", deleted_count));
@@ -903,6 +983,22 @@ impl App {
     }
 
     fn delete_all_dead(&mut self) -> Result<()> {
+        // Record machine dead paths for undo
+        let mut machine_deleted = Vec::new();
+        for (idx, path) in self.machine_paths.iter().enumerate() {
+            if !crate::path_analyzer::path_exists(path) {
+                machine_deleted.push((idx, path.clone()));
+            }
+        }
+
+        // Record user dead paths for undo
+        let mut user_deleted = Vec::new();
+        for (idx, path) in self.user_paths.iter().enumerate() {
+            if !crate::path_analyzer::path_exists(path) {
+                user_deleted.push((idx, path.clone()));
+            }
+        }
+
         let machine_before = self.machine_paths.len();
         let user_before = self.user_paths.len();
 
@@ -914,6 +1010,21 @@ impl App {
         let deleted =
             (machine_before - self.machine_paths.len()) + (user_before - self.user_paths.len());
 
+        // Clear redo stack and record undo operations
+        self.clear_redo_stack();
+        if !machine_deleted.is_empty() {
+            self.undo_stack.push(Operation::DeletePaths {
+                panel: Panel::Machine,
+                deleted: machine_deleted,
+            });
+        }
+        if !user_deleted.is_empty() {
+            self.undo_stack.push(Operation::DeletePaths {
+                panel: Panel::User,
+                deleted: user_deleted,
+            });
+        }
+
         self.reanalyze();
         self.has_changes = true;
         self.set_status(&format!("Deleted {} dead path(s)", deleted));
@@ -924,7 +1035,19 @@ impl App {
         let mut seen = HashSet::new();
         let mut deleted = 0;
 
+        // Identify duplicates in machine paths for undo
+        let mut machine_deleted = Vec::new();
+        for (idx, path) in self.machine_paths.iter().enumerate() {
+            let normalized = normalize_path(path).to_lowercase();
+            if seen.contains(&normalized) {
+                machine_deleted.push((idx, path.clone()));
+            } else {
+                seen.insert(normalized);
+            }
+        }
+
         // Keep first occurrence of each path (case-insensitive, normalized)
+        seen.clear();
         let mut new_machine = Vec::new();
         for path in &self.machine_paths {
             let normalized = normalize_path(path).to_lowercase();
@@ -935,6 +1058,17 @@ impl App {
             }
         }
         self.machine_paths = new_machine;
+
+        // Identify duplicates in user paths for undo
+        let mut user_deleted = Vec::new();
+        for (idx, path) in self.user_paths.iter().enumerate() {
+            let normalized = normalize_path(path).to_lowercase();
+            if seen.contains(&normalized) {
+                user_deleted.push((idx, path.clone()));
+            } else {
+                seen.insert(normalized);
+            }
+        }
 
         let mut new_user = Vec::new();
         for path in &self.user_paths {
@@ -947,6 +1081,21 @@ impl App {
         }
         self.user_paths = new_user;
 
+        // Clear redo stack and record undo operations
+        self.clear_redo_stack();
+        if !machine_deleted.is_empty() {
+            self.undo_stack.push(Operation::DeletePaths {
+                panel: Panel::Machine,
+                deleted: machine_deleted,
+            });
+        }
+        if !user_deleted.is_empty() {
+            self.undo_stack.push(Operation::DeletePaths {
+                panel: Panel::User,
+                deleted: user_deleted,
+            });
+        }
+
         self.reanalyze();
         self.has_changes = true;
         self.set_status(&format!("Deleted {} duplicate path(s)", deleted));
@@ -955,6 +1104,7 @@ impl App {
 
     fn normalize_selected(&mut self) {
         let mut normalized_count = 0;
+        let mut changes = Vec::new();
 
         match self.active_panel {
             Panel::Machine => {
@@ -962,24 +1112,44 @@ impl App {
                     if let Some(path) = self.machine_paths.get_mut(*idx) {
                         let normalized = normalize_path(path);
                         if &normalized != path {
+                            changes.push((*idx, path.clone(), normalized.clone()));
                             *path = normalized;
                             normalized_count += 1;
                         }
                     }
                 }
                 self.machine_marked.clear();
+
+                // Clear redo stack and record undo operation for machine panel
+                if !changes.is_empty() {
+                    self.clear_redo_stack();
+                    self.undo_stack.push(Operation::NormalizePaths {
+                        panel: Panel::Machine,
+                        changes,
+                    });
+                }
             }
             Panel::User => {
                 for idx in &self.user_marked {
                     if let Some(path) = self.user_paths.get_mut(*idx) {
                         let normalized = normalize_path(path);
                         if &normalized != path {
+                            changes.push((*idx, path.clone(), normalized.clone()));
                             *path = normalized;
                             normalized_count += 1;
                         }
                     }
                 }
                 self.user_marked.clear();
+
+                // Clear redo stack and record undo operation for user panel
+                if !changes.is_empty() {
+                    self.clear_redo_stack();
+                    self.undo_stack.push(Operation::NormalizePaths {
+                        panel: Panel::User,
+                        changes,
+                    });
+                }
             }
         }
 
@@ -991,7 +1161,10 @@ impl App {
     }
 
     fn move_marked_to_other_panel(&mut self) -> Result<()> {
-        let (from_paths, to_paths, from_marked) = match self.active_panel {
+        let from_panel = self.active_panel;
+        let to_panel = from_panel.toggle();
+
+        let (from_paths, to_paths, from_marked) = match from_panel {
             Panel::Machine => (
                 &mut self.machine_paths,
                 &mut self.user_paths,
@@ -1008,9 +1181,19 @@ impl App {
             return Ok(());
         }
 
-        let mut moved = Vec::new();
+        // Record for undo: paths with their original indices
+        let mut paths_with_indices = Vec::new();
         let mut indices: Vec<_> = from_marked.iter().copied().collect();
-        indices.sort_unstable_by(|a, b| b.cmp(a)); // Reverse order to maintain indices
+        indices.sort_unstable(); // Sort in ascending order for recording
+
+        for idx in &indices {
+            if let Some(path) = from_paths.get(*idx) {
+                paths_with_indices.push((*idx, path.clone()));
+            }
+        }
+
+        let mut moved = Vec::new();
+        indices.sort_unstable_by(|a, b| b.cmp(a)); // Reverse order to maintain indices during removal
 
         for idx in indices {
             if let Some(path) = from_paths.get(idx) {
@@ -1033,12 +1216,22 @@ impl App {
         let count = moved.len();
         from_marked.clear();
 
+        // Clear redo stack and record undo operation
+        if !paths_with_indices.is_empty() {
+            self.clear_redo_stack();
+            self.undo_stack.push(Operation::MovePaths {
+                from_panel,
+                to_panel,
+                paths_with_indices,
+            });
+        }
+
         self.reanalyze();
         self.has_changes = true;
         self.set_status(&format!(
             "Moved {} path(s) to {}",
             count,
-            self.active_panel.toggle().scope().as_str()
+            to_panel.scope().as_str()
         ));
         Ok(())
     }
@@ -1047,18 +1240,40 @@ impl App {
         match self.active_panel {
             Panel::Machine => {
                 if self.machine_selected > 0 {
-                    self.machine_paths
-                        .swap(self.machine_selected, self.machine_selected - 1);
+                    let idx1 = self.machine_selected;
+                    let idx2 = self.machine_selected - 1;
+
+                    self.machine_paths.swap(idx1, idx2);
                     self.machine_selected -= 1;
+
+                    // Clear redo stack and record undo operation
+                    self.clear_redo_stack();
+                    self.undo_stack.push(Operation::SwapPaths {
+                        panel: Panel::Machine,
+                        index1: idx1,
+                        index2: idx2,
+                    });
+
                     self.has_changes = true;
                     self.reanalyze();
                 }
             }
             Panel::User => {
                 if self.user_selected > 0 {
-                    self.user_paths
-                        .swap(self.user_selected, self.user_selected - 1);
+                    let idx1 = self.user_selected;
+                    let idx2 = self.user_selected - 1;
+
+                    self.user_paths.swap(idx1, idx2);
                     self.user_selected -= 1;
+
+                    // Clear redo stack and record undo operation
+                    self.clear_redo_stack();
+                    self.undo_stack.push(Operation::SwapPaths {
+                        panel: Panel::User,
+                        index1: idx1,
+                        index2: idx2,
+                    });
+
                     self.has_changes = true;
                     self.reanalyze();
                 }
@@ -1104,18 +1319,31 @@ impl App {
         }
 
         // Directory exists or can't be created - add it
-        match self.active_panel {
+        let new_path = self.input_buffer.clone();
+        let (panel, index) = match self.active_panel {
             Panel::Machine => {
                 if !self.is_admin {
                     self.set_status("Need admin rights to add MACHINE paths");
                     return Ok(());
                 }
-                self.machine_paths.push(self.input_buffer.clone());
+                let idx = self.machine_paths.len();
+                self.machine_paths.push(new_path.clone());
+                (Panel::Machine, idx)
             }
             Panel::User => {
-                self.user_paths.push(self.input_buffer.clone());
+                let idx = self.user_paths.len();
+                self.user_paths.push(new_path.clone());
+                (Panel::User, idx)
             }
-        }
+        };
+
+        // Clear redo stack and record undo operation
+        self.clear_redo_stack();
+        self.undo_stack.push(Operation::AddPath {
+            panel,
+            index,
+            path: new_path,
+        });
 
         self.reanalyze();
         self.has_changes = true;
@@ -1128,6 +1356,8 @@ impl App {
             return Ok(());
         }
 
+        let new_path = self.input_buffer.clone();
+
         match self.active_panel {
             Panel::Machine => {
                 if !self.is_admin {
@@ -1135,12 +1365,32 @@ impl App {
                     return Ok(());
                 }
                 if let Some(path) = self.machine_paths.get_mut(self.machine_selected) {
-                    *path = self.input_buffer.clone();
+                    let old_path = path.clone();
+                    *path = new_path.clone();
+
+                    // Clear redo stack and record undo operation
+                    self.clear_redo_stack();
+                    self.undo_stack.push(Operation::EditPath {
+                        panel: Panel::Machine,
+                        index: self.machine_selected,
+                        old_path,
+                        new_path,
+                    });
                 }
             }
             Panel::User => {
                 if let Some(path) = self.user_paths.get_mut(self.user_selected) {
-                    *path = self.input_buffer.clone();
+                    let old_path = path.clone();
+                    *path = new_path.clone();
+
+                    // Clear redo stack and record undo operation
+                    self.clear_redo_stack();
+                    self.undo_stack.push(Operation::EditPath {
+                        panel: Panel::User,
+                        index: self.user_selected,
+                        old_path,
+                        new_path,
+                    });
                 }
             }
         }
@@ -1217,6 +1467,8 @@ impl App {
         self.user_original = self.user_paths.clone();
         self.machine_original = self.machine_paths.clone();
         self.has_changes = false;
+
+        // Note: Undo/redo stacks are NOT cleared on save, allowing users to undo changes even after saving
 
         // Detect running processes that won't pick up the new PATH
         match crate::process_detector::detect_running_processes() {
@@ -1610,6 +1862,266 @@ impl App {
             user_non_normalized,
         }
     }
+
+    /// Undo the last operation by popping from the undo stack and reversing it
+    pub fn undo(&mut self) -> Result<()> {
+        if let Some(operation) = self.undo_stack.pop() {
+            // Push to redo stack before reversing
+            self.redo_stack.push(operation.clone());
+
+            // Reverse the operation without recording it
+            match operation {
+                Operation::DeletePaths { panel, deleted } => {
+                    // Restore deleted paths at their original indices
+                    let paths = match panel {
+                        Panel::Machine => &mut self.machine_paths,
+                        Panel::User => &mut self.user_paths,
+                    };
+
+                    // Sort by index to insert in correct order
+                    let mut sorted_deleted = deleted;
+                    sorted_deleted.sort_by_key(|(idx, _)| *idx);
+
+                    for (idx, path) in sorted_deleted {
+                        paths.insert(idx, path);
+                    }
+                }
+
+                Operation::AddPath { panel, index, .. } => {
+                    // Remove the added path
+                    let paths = match panel {
+                        Panel::Machine => &mut self.machine_paths,
+                        Panel::User => &mut self.user_paths,
+                    };
+
+                    if index < paths.len() {
+                        paths.remove(index);
+                    }
+                }
+
+                Operation::EditPath {
+                    panel,
+                    index,
+                    old_path,
+                    ..
+                } => {
+                    // Restore the old path value
+                    let paths = match panel {
+                        Panel::Machine => &mut self.machine_paths,
+                        Panel::User => &mut self.user_paths,
+                    };
+
+                    if let Some(path) = paths.get_mut(index) {
+                        *path = old_path;
+                    }
+                }
+
+                Operation::SwapPaths {
+                    panel,
+                    index1,
+                    index2,
+                } => {
+                    // Swap back (same operation reverses itself)
+                    let paths = match panel {
+                        Panel::Machine => &mut self.machine_paths,
+                        Panel::User => &mut self.user_paths,
+                    };
+
+                    if index1 < paths.len() && index2 < paths.len() {
+                        paths.swap(index1, index2);
+                    }
+                }
+
+                Operation::MovePaths {
+                    from_panel,
+                    to_panel: _,
+                    paths_with_indices,
+                } => {
+                    // Move paths back from to_panel to from_panel at their original indices
+                    let (from_paths, to_paths) = match from_panel {
+                        Panel::Machine => (&mut self.machine_paths, &mut self.user_paths),
+                        Panel::User => (&mut self.user_paths, &mut self.machine_paths),
+                    };
+
+                    // Remove from destination panel (they were appended at the end)
+                    // We need to remove the last N items where N = paths_with_indices.len()
+                    let count = paths_with_indices.len();
+                    let new_len = to_paths.len().saturating_sub(count);
+                    to_paths.truncate(new_len);
+
+                    // Restore to source panel at original indices
+                    let mut sorted_paths = paths_with_indices;
+                    sorted_paths.sort_by_key(|(idx, _)| *idx);
+
+                    for (idx, path) in sorted_paths {
+                        from_paths.insert(idx, path);
+                    }
+                }
+
+                Operation::NormalizePaths { panel, changes } => {
+                    // Restore old (non-normalized) values
+                    let paths = match panel {
+                        Panel::Machine => &mut self.machine_paths,
+                        Panel::User => &mut self.user_paths,
+                    };
+
+                    for (idx, old_path, _) in changes {
+                        if let Some(path) = paths.get_mut(idx) {
+                            *path = old_path;
+                        }
+                    }
+                }
+            }
+
+            self.reanalyze();
+            self.has_changes = true;
+            self.set_status("Undo successful");
+            Ok(())
+        } else {
+            self.set_status("Nothing to undo");
+            Ok(())
+        }
+    }
+
+    /// Check if there are operations available to undo
+    pub fn can_undo(&self) -> bool {
+        !self.undo_stack.is_empty()
+    }
+
+    /// Redo the last undone operation by popping from the redo stack and re-applying it
+    pub fn redo(&mut self) -> Result<()> {
+        if let Some(operation) = self.redo_stack.pop() {
+            // Re-apply the operation and push back to undo stack
+            self.undo_stack.push(operation.clone());
+
+            // Apply the operation
+            match operation {
+                Operation::DeletePaths { panel, deleted } => {
+                    // Re-delete the paths
+                    let paths = match panel {
+                        Panel::Machine => &mut self.machine_paths,
+                        Panel::User => &mut self.user_paths,
+                    };
+
+                    // Sort indices in reverse to delete from end to start
+                    let mut indices: Vec<_> = deleted.iter().map(|(idx, _)| *idx).collect();
+                    indices.sort_unstable_by(|a, b| b.cmp(a));
+
+                    for idx in indices {
+                        if idx < paths.len() {
+                            paths.remove(idx);
+                        }
+                    }
+                }
+
+                Operation::AddPath {
+                    panel,
+                    index: _,
+                    path,
+                } => {
+                    // Re-add the path
+                    let paths = match panel {
+                        Panel::Machine => &mut self.machine_paths,
+                        Panel::User => &mut self.user_paths,
+                    };
+                    paths.push(path);
+                }
+
+                Operation::EditPath {
+                    panel,
+                    index,
+                    old_path: _,
+                    new_path,
+                } => {
+                    // Re-apply the edit
+                    let paths = match panel {
+                        Panel::Machine => &mut self.machine_paths,
+                        Panel::User => &mut self.user_paths,
+                    };
+
+                    if let Some(path) = paths.get_mut(index) {
+                        *path = new_path;
+                    }
+                }
+
+                Operation::SwapPaths {
+                    panel,
+                    index1,
+                    index2,
+                } => {
+                    // Re-swap (same as undo)
+                    let paths = match panel {
+                        Panel::Machine => &mut self.machine_paths,
+                        Panel::User => &mut self.user_paths,
+                    };
+
+                    if index1 < paths.len() && index2 < paths.len() {
+                        paths.swap(index1, index2);
+                    }
+                }
+
+                Operation::MovePaths {
+                    from_panel,
+                    to_panel: _,
+                    paths_with_indices,
+                } => {
+                    // Re-do: move paths from from_panel to to_panel (destination is implicit from from_panel)
+                    let (from_paths, to_paths) = match from_panel {
+                        Panel::Machine => (&mut self.machine_paths, &mut self.user_paths),
+                        Panel::User => (&mut self.user_paths, &mut self.machine_paths),
+                    };
+
+                    // Remove from source panel (sorted in reverse)
+                    let mut indices: Vec<_> =
+                        paths_with_indices.iter().map(|(idx, _)| *idx).collect();
+                    indices.sort_unstable_by(|a, b| b.cmp(a));
+
+                    for idx in indices {
+                        if idx < from_paths.len() {
+                            from_paths.remove(idx);
+                        }
+                    }
+
+                    // Add to destination panel
+                    for (_, path) in paths_with_indices {
+                        to_paths.push(path);
+                    }
+                }
+
+                Operation::NormalizePaths { panel, changes } => {
+                    // Re-apply normalizations
+                    let paths = match panel {
+                        Panel::Machine => &mut self.machine_paths,
+                        Panel::User => &mut self.user_paths,
+                    };
+
+                    for (idx, _, new_path) in changes {
+                        if let Some(path) = paths.get_mut(idx) {
+                            *path = new_path;
+                        }
+                    }
+                }
+            }
+
+            self.reanalyze();
+            self.has_changes = true;
+            self.set_status("Redo successful");
+            Ok(())
+        } else {
+            self.set_status("Nothing to redo");
+            Ok(())
+        }
+    }
+
+    /// Check if there are operations available to redo
+    pub fn can_redo(&self) -> bool {
+        !self.redo_stack.is_empty()
+    }
+
+    /// Clear the redo stack - called whenever a new operation is performed
+    fn clear_redo_stack(&mut self) {
+        self.redo_stack.clear();
+    }
 }
 
 pub struct Statistics {
@@ -1660,6 +2172,8 @@ mod tests {
             theme: Theme::default(),
             filter_mode: FilterMode::None,
             filter_menu_selected: 0,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
             last_click_time: std::time::Instant::now(),
             last_click_pos: (Panel::Machine, 0),
         }

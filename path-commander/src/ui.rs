@@ -314,7 +314,7 @@ impl UI {
                 // Context-sensitive hints based on application state
                 if filter_active {
                     // When filter is active - show filter-related operations
-                    vec![
+                    let mut hints_vec = vec![
                         Span::styled("F1", Style::default().fg(app.theme.header_fg)),
                         Span::raw(" Help │ "),
                         Span::styled("/", Style::default().fg(app.theme.header_fg)),
@@ -323,14 +323,31 @@ impl UI {
                         Span::raw(" Mark All │ "),
                         Span::styled("F3", Style::default().fg(app.theme.header_fg)),
                         Span::raw(" Del │ "),
+                    ];
+                    if app.can_undo() {
+                        hints_vec.push(Span::styled(
+                            "Ctrl+Z",
+                            Style::default().fg(app.theme.header_fg),
+                        ));
+                        hints_vec.push(Span::raw(" Undo │ "));
+                    }
+                    if app.can_redo() {
+                        hints_vec.push(Span::styled(
+                            "Ctrl+Y",
+                            Style::default().fg(app.theme.header_fg),
+                        ));
+                        hints_vec.push(Span::raw(" Redo │ "));
+                    }
+                    hints_vec.extend(vec![
                         Span::styled("Ctrl+S", Style::default().fg(app.theme.header_fg)),
                         Span::raw(" Save │ "),
                         Span::styled("Q", Style::default().fg(app.theme.header_fg)),
                         Span::raw(" Quit"),
-                    ]
+                    ]);
+                    hints_vec
                 } else if total_marked > 0 {
                     // When items are marked - show bulk operations
-                    vec![
+                    let mut hints_vec = vec![
                         Span::styled("F1", Style::default().fg(app.theme.header_fg)),
                         Span::raw(" Help │ "),
                         Span::styled("F3", Style::default().fg(app.theme.header_fg)),
@@ -339,16 +356,33 @@ impl UI {
                         Span::raw(" Move │ "),
                         Span::styled("F9", Style::default().fg(app.theme.header_fg)),
                         Span::raw(" Normalize │ "),
+                    ];
+                    if app.can_undo() {
+                        hints_vec.push(Span::styled(
+                            "Ctrl+Z",
+                            Style::default().fg(app.theme.header_fg),
+                        ));
+                        hints_vec.push(Span::raw(" Undo │ "));
+                    }
+                    if app.can_redo() {
+                        hints_vec.push(Span::styled(
+                            "Ctrl+Y",
+                            Style::default().fg(app.theme.header_fg),
+                        ));
+                        hints_vec.push(Span::raw(" Redo │ "));
+                    }
+                    hints_vec.extend(vec![
                         Span::styled("Ctrl+Shift+U", Style::default().fg(app.theme.header_fg)),
                         Span::raw(" Unmark All │ "),
                         Span::styled("Ctrl+S", Style::default().fg(app.theme.header_fg)),
                         Span::raw(" Save │ "),
                         Span::styled("Q", Style::default().fg(app.theme.header_fg)),
                         Span::raw(" Quit"),
-                    ]
+                    ]);
+                    hints_vec
                 } else {
                     // Normal mode - default hints with more discoverable features
-                    vec![
+                    let mut hints_vec = vec![
                         Span::styled("F1", Style::default().fg(app.theme.header_fg)),
                         Span::raw(" Help │ "),
                         Span::styled("F2", Style::default().fg(app.theme.header_fg)),
@@ -359,13 +393,28 @@ impl UI {
                         Span::raw(" Add │ "),
                         Span::styled("/", Style::default().fg(app.theme.header_fg)),
                         Span::raw(" Filter │ "),
-                        Span::styled("Ctrl+A", Style::default().fg(app.theme.header_fg)),
-                        Span::raw(" Mark All │ "),
+                    ];
+                    if app.can_undo() {
+                        hints_vec.push(Span::styled(
+                            "Ctrl+Z",
+                            Style::default().fg(app.theme.header_fg),
+                        ));
+                        hints_vec.push(Span::raw(" Undo │ "));
+                    }
+                    if app.can_redo() {
+                        hints_vec.push(Span::styled(
+                            "Ctrl+Y",
+                            Style::default().fg(app.theme.header_fg),
+                        ));
+                        hints_vec.push(Span::raw(" Redo │ "));
+                    }
+                    hints_vec.extend(vec![
                         Span::styled("Ctrl+S", Style::default().fg(app.theme.header_fg)),
                         Span::raw(" Save │ "),
                         Span::styled("Q", Style::default().fg(app.theme.header_fg)),
                         Span::raw(" Quit"),
-                    ]
+                    ]);
+                    hints_vec
                 }
             }
             _ => vec![
@@ -467,6 +516,8 @@ impl UI {
             Line::from("  Ctrl+S          Apply changes to registry"),
             Line::from("  Ctrl+B          Create backup"),
             Line::from("  Ctrl+R          Restore from backup"),
+            Line::from("  Ctrl+Z          Undo last operation"),
+            Line::from("  Ctrl+Y          Redo last undone operation"),
             Line::from(""),
             Line::from(vec![Span::styled(
                 "Color Legend:",
