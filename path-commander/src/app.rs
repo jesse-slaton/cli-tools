@@ -2,6 +2,7 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{layout::Rect, widgets::ScrollbarState};
 use std::collections::HashSet;
+use std::path::PathBuf;
 
 use crate::backup::{self, PathBackup};
 use crate::path_analyzer::{analyze_paths, normalize_path, PathInfo};
@@ -50,6 +51,7 @@ pub enum Mode {
     ProcessRestartInfo,
     FilterMenu,
     ThemeSelection,
+    FileBrowser,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,6 +81,16 @@ pub enum FilterMode {
     Duplicates,
     NonNormalized,
     Valid,
+}
+
+/// Represents a directory entry in the file browser
+#[derive(Debug, Clone)]
+pub struct DirectoryEntry {
+    pub name: String,
+    pub path: PathBuf,
+    #[allow(dead_code)]
+    pub is_parent: bool, // True for ".." entry (kept for future use)
+    pub is_drive: bool, // True for drive letter entries (C:\, D:\, etc.)
 }
 
 /// Represents an undoable operation with enough data to reverse it
@@ -165,6 +177,11 @@ pub struct App {
     pub redo_stack: Vec<Operation>,        // Stack of redoable operations
     last_click_time: std::time::Instant,   // Time of last mouse click for double-click detection
     last_click_pos: (Panel, usize),        // Panel and row of last click
+    // File browser state
+    pub file_browser_current_path: PathBuf, // Current directory being browsed
+    pub file_browser_entries: Vec<DirectoryEntry>, // Directory entries in current path
+    pub file_browser_selected: usize,       // Selected entry index
+    pub file_browser_scrollbar_state: ScrollbarState, // Scrollbar state for file browser
 }
 
 impl App {
@@ -224,6 +241,11 @@ impl App {
             redo_stack: Vec::new(),
             last_click_time: std::time::Instant::now(),
             last_click_pos: (Panel::Machine, 0),
+            file_browser_current_path: std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("C:\\")),
+            file_browser_entries: Vec::new(),
+            file_browser_selected: 0,
+            file_browser_scrollbar_state: ScrollbarState::new(0).position(0),
         })
     }
 
@@ -310,6 +332,7 @@ impl App {
             Mode::Input(input_mode) => self.handle_input_mode(key, input_mode),
             Mode::BackupList => self.handle_backup_list_input(key),
             Mode::ProcessRestartInfo => self.handle_process_restart_info_input(key),
+            Mode::FileBrowser => self.handle_file_browser_input(key),
             Mode::FilterMenu => self.handle_filter_menu_input(key),
             Mode::ThemeSelection => self.handle_theme_selection_input(key),
         }
@@ -565,6 +588,77 @@ impl App {
                 }
             }
             KeyCode::Esc | KeyCode::Char('q') => {
+                self.mode = Mode::Normal;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn handle_file_browser_input(&mut self, key: KeyEvent) -> Result<()> {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.file_browser_selected > 0 {
+                    self.file_browser_selected -= 1;
+                    self.file_browser_scrollbar_state = self
+                        .file_browser_scrollbar_state
+                        .position(self.file_browser_selected);
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if self.file_browser_selected + 1 < self.file_browser_entries.len() {
+                    self.file_browser_selected += 1;
+                    self.file_browser_scrollbar_state = self
+                        .file_browser_scrollbar_state
+                        .position(self.file_browser_selected);
+                }
+            }
+            KeyCode::PageUp => {
+                let jump = self.viewport_height.saturating_sub(1).max(1) as usize;
+                self.file_browser_selected = self.file_browser_selected.saturating_sub(jump);
+                self.file_browser_scrollbar_state = self
+                    .file_browser_scrollbar_state
+                    .position(self.file_browser_selected);
+            }
+            KeyCode::PageDown => {
+                let jump = self.viewport_height.saturating_sub(1).max(1) as usize;
+                let max_idx = self.file_browser_entries.len().saturating_sub(1);
+                self.file_browser_selected = (self.file_browser_selected + jump).min(max_idx);
+                self.file_browser_scrollbar_state = self
+                    .file_browser_scrollbar_state
+                    .position(self.file_browser_selected);
+            }
+            KeyCode::Home | KeyCode::Char('g') => {
+                self.file_browser_selected = 0;
+                self.file_browser_scrollbar_state = self
+                    .file_browser_scrollbar_state
+                    .position(self.file_browser_selected);
+            }
+            KeyCode::End | KeyCode::Char('G') => {
+                if !self.file_browser_entries.is_empty() {
+                    self.file_browser_selected = self.file_browser_entries.len() - 1;
+                    self.file_browser_scrollbar_state = self
+                        .file_browser_scrollbar_state
+                        .position(self.file_browser_selected);
+                }
+            }
+            KeyCode::Enter => {
+                // If an entry is selected, navigate into it
+                if !self.file_browser_entries.is_empty() {
+                    self.navigate_to_selected_directory();
+                }
+            }
+            KeyCode::Char(' ') => {
+                // Space key: select current directory for adding to PATH
+                self.select_current_directory_for_path()?;
+            }
+            KeyCode::Tab => {
+                // Tab: switch to manual text input mode
+                self.mode = Mode::Input(InputMode::AddPath);
+                self.input_buffer = self.file_browser_current_path.to_string_lossy().to_string();
+            }
+            KeyCode::Esc | KeyCode::Char('q') => {
+                // Cancel file browser
                 self.mode = Mode::Normal;
             }
             _ => {}
@@ -1498,8 +1592,165 @@ impl App {
     }
 
     fn start_add_path(&mut self) {
-        self.mode = Mode::Input(InputMode::AddPath);
+        // Open file browser instead of text input
+        self.mode = Mode::FileBrowser;
+        self.file_browser_selected = 0;
+        // Start from current directory or C:\ if current dir unavailable
+        self.file_browser_current_path =
+            std::env::current_dir().unwrap_or_else(|_| PathBuf::from("C:\\"));
+        self.read_current_directory();
+    }
+
+    /// Get available drive letters on Windows
+    fn get_available_drives() -> Vec<DirectoryEntry> {
+        let mut drives = Vec::new();
+
+        // Add network drives option
+        drives.push(DirectoryEntry {
+            name: "Network...".to_string(),
+            path: PathBuf::from("NETWORK"),
+            is_parent: false,
+            is_drive: true,
+        });
+
+        // Check drives A-Z
+        for letter in b'A'..=b'Z' {
+            let drive_letter = letter as char;
+            let drive_path = PathBuf::from(format!("{}:\\", drive_letter));
+
+            // Check if the drive exists
+            if drive_path.exists() {
+                drives.push(DirectoryEntry {
+                    name: format!("{}:", drive_letter),
+                    path: drive_path,
+                    is_parent: false,
+                    is_drive: true,
+                });
+            }
+        }
+
+        drives
+    }
+
+    /// Check if a path is a drive root (e.g., C:\, D:\)
+    fn is_drive_root(path: &std::path::Path) -> bool {
+        let path_str = path.to_string_lossy();
+        // Match patterns like "C:\", "D:\", etc.
+        path_str.len() == 3
+            && path_str.chars().nth(1) == Some(':')
+            && path_str.chars().nth(2) == Some('\\')
+    }
+
+    /// Read and populate entries for the current directory in file browser
+    fn read_current_directory(&mut self) {
+        self.file_browser_entries.clear();
+
+        // Check if we're at a drive root or in "drives view"
+        let path_str = self.file_browser_current_path.to_string_lossy().to_string();
+
+        if path_str == "DRIVES" {
+            // Show all available drives
+            self.file_browser_entries = Self::get_available_drives();
+        } else {
+            // Add parent directory entry
+            if Self::is_drive_root(&self.file_browser_current_path) {
+                // At drive root, parent goes to drives list
+                self.file_browser_entries.push(DirectoryEntry {
+                    name: "..".to_string(),
+                    path: PathBuf::from("DRIVES"),
+                    is_parent: true,
+                    is_drive: false,
+                });
+            } else if self.file_browser_current_path.parent().is_some() {
+                // Normal parent directory
+                self.file_browser_entries.push(DirectoryEntry {
+                    name: "..".to_string(),
+                    path: self
+                        .file_browser_current_path
+                        .parent()
+                        .unwrap()
+                        .to_path_buf(),
+                    is_parent: true,
+                    is_drive: false,
+                });
+            }
+
+            // Read directory entries (only if not in drives view)
+            if let Ok(entries) = std::fs::read_dir(&self.file_browser_current_path) {
+                let mut dirs: Vec<DirectoryEntry> = entries
+                    .filter_map(|entry| entry.ok())
+                    .filter(|entry| {
+                        // Only include directories
+                        entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false)
+                    })
+                    .filter_map(|entry| {
+                        let path = entry.path();
+                        let name = path.file_name()?.to_string_lossy().to_string();
+                        Some(DirectoryEntry {
+                            name,
+                            path,
+                            is_parent: false,
+                            is_drive: false,
+                        })
+                    })
+                    .collect();
+
+                // Sort directories alphabetically (case-insensitive)
+                dirs.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+
+                self.file_browser_entries.extend(dirs);
+            }
+        }
+
+        // Ensure selection is valid
+        if self.file_browser_selected >= self.file_browser_entries.len()
+            && !self.file_browser_entries.is_empty()
+        {
+            self.file_browser_selected = self.file_browser_entries.len() - 1;
+        }
+
+        // Update scrollbar state
+        self.file_browser_scrollbar_state = ScrollbarState::new(self.file_browser_entries.len())
+            .position(self.file_browser_selected);
+    }
+
+    /// Navigate to the selected directory in file browser
+    fn navigate_to_selected_directory(&mut self) {
+        if self.file_browser_entries.is_empty() {
+            return;
+        }
+
+        if let Some(entry) = self.file_browser_entries.get(self.file_browser_selected) {
+            // Check if user selected the network option
+            if entry.path.to_string_lossy() == "NETWORK" {
+                // Switch to manual input mode for network path
+                self.mode = Mode::Input(InputMode::AddPath);
+                self.input_buffer = "\\\\".to_string(); // Start with UNC prefix
+                return;
+            }
+
+            self.file_browser_current_path = entry.path.clone();
+            self.file_browser_selected = 0; // Reset selection when entering new directory
+            self.read_current_directory();
+        }
+    }
+
+    /// Select the current directory in file browser and add it to PATH
+    fn select_current_directory_for_path(&mut self) -> Result<()> {
+        // Don't allow adding the "DRIVES" pseudo-directory
+        let path_str = self.file_browser_current_path.to_string_lossy().to_string();
+        if path_str == "DRIVES" {
+            self.set_status("Cannot add drives list to PATH. Navigate to a directory first.");
+            return Ok(());
+        }
+
+        // Set input buffer and add path
+        self.input_buffer = path_str;
+        self.mode = Mode::Normal;
+        self.add_path_from_input()?;
         self.input_buffer.clear();
+
+        Ok(())
     }
 
     fn start_edit_path(&mut self) {
@@ -2467,6 +2718,10 @@ mod tests {
             redo_stack: Vec::new(),
             last_click_time: std::time::Instant::now(),
             last_click_pos: (Panel::Machine, 0),
+            file_browser_current_path: PathBuf::from("C:\\"),
+            file_browser_entries: Vec::new(),
+            file_browser_selected: 0,
+            file_browser_scrollbar_state: ScrollbarState::new(0).position(0),
         }
     }
 
@@ -2767,8 +3022,11 @@ mod tests {
 
         app.start_add_path();
 
-        assert_eq!(app.mode, Mode::Input(InputMode::AddPath));
-        assert_eq!(app.input_buffer, "");
+        // Now opens file browser instead of text input
+        assert_eq!(app.mode, Mode::FileBrowser);
+        assert_eq!(app.file_browser_selected, 0);
+        // Should have loaded directory entries (at least ".." if not at root)
+        // The exact number depends on the current directory, so we just check it's initialized
     }
 
     #[test]

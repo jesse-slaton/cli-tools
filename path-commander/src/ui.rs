@@ -63,6 +63,11 @@ impl UI {
         if let Mode::Input(input_mode) = app.mode {
             self.render_input_overlay(f, app, input_mode);
         }
+
+        // Render file browser overlay if in file browser mode
+        if let Mode::FileBrowser = app.mode {
+            self.render_file_browser(f, app);
+        }
     }
 
     fn render_header(&self, f: &mut Frame, area: Rect, app: &App) {
@@ -1159,6 +1164,159 @@ impl UI {
         let area = centered_rect(70, 20, f.area());
         f.render_widget(ratatui::widgets::Clear, area);
         f.render_widget(input, area);
+    }
+
+    fn render_file_browser(&self, f: &mut Frame, app: &App) {
+        let area = centered_rect(85, 75, f.area());
+
+        // Clear the area and render the main block
+        f.render_widget(ratatui::widgets::Clear, area);
+
+        // Render the main block
+        let main_block = Block::default()
+            .title(vec![Span::styled(
+                " Browse Directories ",
+                Style::default()
+                    .fg(app.theme.dialog_title_fg)
+                    .bg(app.theme.dialog_title_bg)
+                    .add_modifier(Modifier::BOLD),
+            )])
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(app.theme.dialog_border_fg))
+            .style(
+                Style::default()
+                    .fg(app.theme.dialog_fg)
+                    .bg(app.theme.dialog_bg),
+            );
+
+        f.render_widget(main_block.clone(), area);
+
+        // Get inner area (inside the borders)
+        let inner_area = main_block.inner(area);
+
+        // Create layout: title area, list area, help area
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(2), // Current path
+                Constraint::Min(0),    // Directory list
+                Constraint::Length(2), // Key hints
+            ])
+            .split(inner_area);
+
+        // Render current path
+        let current_path = app.file_browser_current_path.to_string_lossy().to_string();
+        let display_path = if current_path == "DRIVES" {
+            "Available Drives".to_string()
+        } else {
+            format!("Current: {}", current_path)
+        };
+        let path_text = vec![
+            Line::from(vec![Span::styled(
+                display_path,
+                Style::default().fg(app.theme.dialog_fg),
+            )]),
+            Line::from(""),
+        ];
+        let path_widget = Paragraph::new(path_text)
+            .style(
+                Style::default()
+                    .fg(app.theme.dialog_fg)
+                    .bg(app.theme.dialog_bg),
+            )
+            .alignment(Alignment::Left);
+
+        // Render directory list
+        let items: Vec<ListItem> = app
+            .file_browser_entries
+            .iter()
+            .enumerate()
+            .map(|(idx, entry)| {
+                let is_selected = idx == app.file_browser_selected;
+                let display_name = if entry.name == "Network..." {
+                    format!("<{}>", entry.name) // Network: "<Network...>"
+                } else if entry.is_drive {
+                    format!("[{}]", entry.name) // Drive: "[C:]"
+                } else {
+                    format!("/{}", entry.name) // Parent "/.." or Directory "/dirname"
+                };
+
+                let style = if is_selected {
+                    Style::default()
+                        .fg(app.theme.panel_selected_fg)
+                        .bg(app.theme.panel_selected_bg)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                        .fg(app.theme.dialog_fg)
+                        .bg(app.theme.dialog_bg)
+                };
+
+                ListItem::new(display_name).style(style)
+            })
+            .collect();
+
+        let list = List::new(items).style(
+            Style::default()
+                .fg(app.theme.dialog_fg)
+                .bg(app.theme.dialog_bg),
+        );
+
+        // Render key hints
+        let hints_text = vec![
+            Line::from(""),
+            Line::from(vec![
+                Span::styled(
+                    "Enter",
+                    Style::default()
+                        .fg(app.theme.info_fg)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" navigate │ "),
+                Span::styled(
+                    "Space",
+                    Style::default()
+                        .fg(app.theme.info_fg)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" select │ "),
+                Span::styled(
+                    "Tab",
+                    Style::default()
+                        .fg(app.theme.info_fg)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" manual input │ "),
+                Span::styled(
+                    "ESC",
+                    Style::default()
+                        .fg(app.theme.info_fg)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" cancel"),
+            ]),
+        ];
+        let hints_widget = Paragraph::new(hints_text)
+            .style(
+                Style::default()
+                    .fg(app.theme.dialog_fg)
+                    .bg(app.theme.dialog_bg),
+            )
+            .alignment(Alignment::Center);
+
+        // Render the inner widgets
+        f.render_widget(path_widget, chunks[0]);
+        f.render_widget(list, chunks[1]);
+        f.render_widget(hints_widget, chunks[2]);
+
+        // Render scrollbar
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .style(Style::default().fg(app.theme.scrollbar_fg))
+            .begin_symbol(Some("↑"))
+            .end_symbol(Some("↓"));
+
+        let mut scrollbar_state = app.file_browser_scrollbar_state;
+        f.render_stateful_widget(scrollbar, chunks[1], &mut scrollbar_state);
     }
 
     fn render_backup_list(&self, f: &mut Frame, app: &App) {
