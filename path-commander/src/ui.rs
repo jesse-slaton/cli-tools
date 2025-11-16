@@ -788,14 +788,17 @@ impl UI {
                     .add_modifier(Modifier::BOLD),
             )]),
             Line::from(""),
-            Line::from("The following processes won't pick up the new PATH until restarted:"),
+            Line::from(vec![Span::styled(
+                "The following processes won't pick up the new PATH until restarted:",
+                Style::default().fg(app.theme.dialog_fg),
+            )]),
             Line::from(""),
         ];
 
         // Add each process to the list
         for process in &app.processes_to_restart {
             lines.push(Line::from(vec![
-                Span::raw("  • "),
+                Span::styled("  • ", Style::default().fg(app.theme.dialog_fg)),
                 Span::styled(process, Style::default().fg(app.theme.info_fg)),
             ]));
         }
@@ -803,15 +806,22 @@ impl UI {
         lines.push(Line::from(""));
         lines.push(Line::from(vec![Span::styled(
             "Why restart?",
-            Style::default().add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(app.theme.dialog_fg)
+                .add_modifier(Modifier::BOLD),
         )]));
-        lines.push(Line::from(
+        lines.push(Line::from(vec![Span::styled(
             "These processes load environment variables at startup and don't respond to",
-        ));
-        lines.push(Line::from(
+            Style::default().fg(app.theme.dialog_fg),
+        )]));
+        lines.push(Line::from(vec![Span::styled(
             "WM_SETTINGCHANGE notifications. You'll need to close and reopen them to see",
-        ));
-        lines.push(Line::from("the updated PATH."));
+            Style::default().fg(app.theme.dialog_fg),
+        )]));
+        lines.push(Line::from(vec![Span::styled(
+            "the updated PATH.",
+            Style::default().fg(app.theme.dialog_fg),
+        )]));
         lines.push(Line::from(""));
         lines.push(Line::from(vec![
             Span::styled(
@@ -820,7 +830,10 @@ impl UI {
                     .fg(app.theme.warning_fg)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::raw("New processes started after this point will see the updated PATH."),
+            Span::styled(
+                "New processes started after this point will see the updated PATH.",
+                Style::default().fg(app.theme.dialog_fg),
+            ),
         ]));
         lines.push(Line::from(""));
         lines.push(Line::from(vec![Span::styled(
@@ -833,7 +846,18 @@ impl UI {
                 Block::default()
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(app.theme.dialog_border_fg))
-                    .title(" Process Restart Required "),
+                    .title(vec![Span::styled(
+                        " Process Restart Required ",
+                        Style::default()
+                            .fg(app.theme.dialog_title_fg)
+                            .bg(app.theme.dialog_title_bg)
+                            .add_modifier(Modifier::BOLD),
+                    )])
+                    .style(
+                        Style::default()
+                            .fg(app.theme.dialog_fg)
+                            .bg(app.theme.dialog_bg),
+                    ),
             )
             .alignment(Alignment::Left)
             .wrap(Wrap { trim: false });
@@ -931,8 +955,9 @@ impl UI {
                         .add_modifier(Modifier::BOLD),
                 )]));
                 message_lines.push(Line::from(""));
-                message_lines.push(Line::from(vec![Span::raw(
+                message_lines.push(Line::from(vec![Span::styled(
                     "Create directory and add to PATH?",
+                    Style::default().fg(app.theme.dialog_fg),
                 )]));
             }
             ConfirmAction::CreateMarkedDirectories => {
@@ -952,10 +977,23 @@ impl UI {
 
         message_lines.push(Line::from(""));
         message_lines.push(Line::from(vec![
-            Span::styled("Y", Style::default().fg(app.theme.button_focused_bg)),
-            Span::raw("es / "),
-            Span::styled("N", Style::default().fg(app.theme.error_fg)),
-            Span::raw("o"),
+            Span::styled(
+                "Y",
+                Style::default()
+                    .fg(app.theme.button_focused_fg)
+                    .bg(app.theme.button_focused_bg)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("es", Style::default().fg(app.theme.dialog_fg)),
+            Span::styled(" / ", Style::default().fg(app.theme.dialog_fg)),
+            Span::styled(
+                "N",
+                Style::default()
+                    .fg(Color::White)
+                    .bg(app.theme.error_fg)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("o", Style::default().fg(app.theme.dialog_fg)),
         ]));
 
         let text = message_lines;
@@ -963,9 +1001,20 @@ impl UI {
         let dialog = Paragraph::new(text)
             .block(
                 Block::default()
-                    .title(" Confirm ")
+                    .title(vec![Span::styled(
+                        " Confirm ",
+                        Style::default()
+                            .fg(app.theme.dialog_title_fg)
+                            .bg(app.theme.dialog_title_bg)
+                            .add_modifier(Modifier::BOLD),
+                    )])
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(app.theme.dialog_border_fg)),
+                    .border_style(Style::default().fg(app.theme.dialog_border_fg))
+                    .style(
+                        Style::default()
+                            .fg(app.theme.dialog_fg)
+                            .bg(app.theme.dialog_bg),
+                    ),
             )
             .alignment(Alignment::Center);
 
@@ -982,7 +1031,10 @@ impl UI {
 
         let text = vec![
             Line::from(""),
-            Line::from(vec![Span::raw(&app.input_buffer)]),
+            Line::from(vec![Span::styled(
+                &app.input_buffer,
+                Style::default().fg(app.theme.dialog_fg),
+            )]),
             Line::from(""),
             Line::from(vec![Span::styled(
                 "Enter to confirm, ESC to cancel",
@@ -993,9 +1045,20 @@ impl UI {
         let input = Paragraph::new(text)
             .block(
                 Block::default()
-                    .title(title)
+                    .title(vec![Span::styled(
+                        title,
+                        Style::default()
+                            .fg(app.theme.dialog_title_fg)
+                            .bg(app.theme.dialog_title_bg)
+                            .add_modifier(Modifier::BOLD),
+                    )])
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(app.theme.dialog_border_fg)),
+                    .border_style(Style::default().fg(app.theme.dialog_border_fg))
+                    .style(
+                        Style::default()
+                            .fg(app.theme.dialog_fg)
+                            .bg(app.theme.dialog_bg),
+                    ),
             )
             .alignment(Alignment::Left);
 
