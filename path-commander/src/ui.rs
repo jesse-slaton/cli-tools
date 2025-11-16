@@ -549,6 +549,7 @@ impl UI {
         let outer_block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(app.theme.dialog_border_fg))
+            .style(Style::default().fg(app.theme.help_fg).bg(app.theme.help_bg))
             .title(vec![Span::styled(
                 " Path Commander - Help ",
                 Style::default()
@@ -1275,7 +1276,12 @@ impl UI {
             Block::default()
                 .title(" Select Backup to Restore ")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(app.theme.dialog_border_fg)),
+                .border_style(Style::default().fg(app.theme.dialog_border_fg))
+                .style(
+                    Style::default()
+                        .fg(app.theme.dialog_fg)
+                        .bg(app.theme.dialog_bg),
+                ),
         );
 
         let area = centered_rect(70, 50, f.area());
@@ -1345,7 +1351,12 @@ impl UI {
             Block::default()
                 .title(" Filter Paths ")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(app.theme.dialog_border_fg)),
+                .border_style(Style::default().fg(app.theme.dialog_border_fg))
+                .style(
+                    Style::default()
+                        .fg(app.theme.dialog_fg)
+                        .bg(app.theme.dialog_bg),
+                ),
         );
 
         let area = centered_rect(60, 60, f.area());
@@ -1394,7 +1405,12 @@ impl UI {
             Block::default()
                 .title(" Select Theme ")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(app.theme.dialog_border_fg)),
+                .border_style(Style::default().fg(app.theme.dialog_border_fg))
+                .style(
+                    Style::default()
+                        .fg(app.theme.dialog_fg)
+                        .bg(app.theme.dialog_bg),
+                ),
         );
 
         // Add preview at the bottom
@@ -1447,7 +1463,12 @@ impl UI {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(app.theme.dialog_border_fg)),
+                    .border_style(Style::default().fg(app.theme.dialog_border_fg))
+                    .style(
+                        Style::default()
+                            .fg(app.theme.dialog_fg)
+                            .bg(app.theme.dialog_bg),
+                    ),
             )
             .alignment(Alignment::Left);
 
