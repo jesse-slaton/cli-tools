@@ -981,7 +981,6 @@ impl UI {
                 "Y",
                 Style::default()
                     .fg(app.theme.button_focused_fg)
-                    .bg(app.theme.button_focused_bg)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled("es", Style::default().fg(app.theme.dialog_fg)),
@@ -989,8 +988,7 @@ impl UI {
             Span::styled(
                 "N",
                 Style::default()
-                    .fg(Color::White)
-                    .bg(app.theme.error_fg)
+                    .fg(app.theme.button_focused_fg)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled("o", Style::default().fg(app.theme.dialog_fg)),
