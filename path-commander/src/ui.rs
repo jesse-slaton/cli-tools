@@ -1019,6 +1019,44 @@ impl UI {
                     Style::default().fg(app.theme.warning_fg),
                 )]));
             }
+            ConfirmAction::RequestElevation => {
+                message_lines.push(Line::from(vec![Span::styled(
+                    "Administrator Privileges Required",
+                    Style::default()
+                        .fg(app.theme.dialog_fg)
+                        .add_modifier(Modifier::BOLD),
+                )]));
+                message_lines.push(Line::from(""));
+                message_lines.push(Line::from(vec![Span::styled(
+                    "Modifying MACHINE (system-wide) PATH requires",
+                    Style::default().fg(app.theme.dialog_fg),
+                )]));
+                message_lines.push(Line::from(vec![Span::styled(
+                    "administrator privileges.",
+                    Style::default().fg(app.theme.dialog_fg),
+                )]));
+                message_lines.push(Line::from(""));
+                message_lines.push(Line::from(vec![Span::styled(
+                    "Current privileges: Standard User",
+                    Style::default().fg(app.theme.info_fg),
+                )]));
+                message_lines.push(Line::from(vec![Span::styled(
+                    "Required privileges: Administrator",
+                    Style::default().fg(app.theme.warning_fg),
+                )]));
+                message_lines.push(Line::from(""));
+                message_lines.push(Line::from(vec![Span::styled(
+                    "Restart with elevated privileges?",
+                    Style::default().fg(app.theme.dialog_fg),
+                )]));
+                message_lines.push(Line::from(""));
+                message_lines.push(Line::from(vec![Span::styled(
+                    "(Your current changes will be preserved)",
+                    Style::default()
+                        .fg(app.theme.info_fg)
+                        .add_modifier(Modifier::ITALIC),
+                )]));
+            }
             ConfirmAction::RestoreBackup => {
                 message_lines.push(Line::from(vec![Span::styled(
                     "Restore from selected backup?",

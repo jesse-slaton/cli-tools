@@ -1,6 +1,7 @@
 mod app;
 mod backup;
 mod config;
+mod elevation;
 mod path_analyzer;
 mod permissions;
 mod process_detector;
@@ -35,6 +36,10 @@ struct Args {
     /// Connect to remote computer (hostname or IP address)
     #[arg(short, long)]
     remote: Option<String>,
+
+    /// Restore from elevated state file (internal use only)
+    #[arg(long, hide = true)]
+    restore_state: Option<PathBuf>,
 }
 
 fn main() -> Result<()> {
@@ -52,33 +57,31 @@ fn main() -> Result<()> {
     config::ensure_config_dirs()?;
     config::migrate_backups().ok(); // Don't fail if migration fails
 
+    // Check if restoring from elevation state
+    let elevation_state = if let Some(ref state_file) = args.restore_state {
+        Some(elevation::ElevationState::load(state_file)?)
+    } else {
+        None
+    };
+
     // Load theme
-    let theme = if let Some(theme_name) = args.theme {
+    let theme = if let Some(theme_name) = args.theme.as_ref() {
         // Check if it's a file path
         let path = PathBuf::from(&theme_name);
         if path.exists() {
             Theme::from_mc_skin(&path)?
         } else {
             // Try loading from custom themes directory
-            if let Some(custom_path) = config::get_theme_path(&theme_name) {
+            if let Some(custom_path) = config::get_theme_path(theme_name) {
                 Theme::from_mc_skin(&custom_path)?
             } else {
                 // Try loading as built-in theme
-                Theme::builtin(&theme_name)?
+                Theme::builtin(theme_name)?
             }
         }
     } else {
         Theme::default()
     };
-
-    // Check admin rights and notify user
-    let is_admin = permissions::is_admin();
-    if !is_admin {
-        println!("Warning: Running without administrator privileges.");
-        println!("You can modify USER paths, but MACHINE paths will be read-only.");
-        println!("Press any key to continue...");
-        event::read()?;
-    }
 
     // Setup terminal
     enable_raw_mode()?;
@@ -91,9 +94,13 @@ fn main() -> Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // Create app state (with remote connection if specified)
-    let mut app = if let Some(remote) = args.remote {
-        match App::new_with_remote(theme, &remote) {
+    // Create app state
+    let mut app = if let Some(state) = elevation_state {
+        // Restore from elevation state
+        App::from_elevation_state(theme, state)?
+    } else if let Some(remote) = args.remote {
+        // Connect to remote computer
+        match App::new_with_remote(theme, args.theme.clone(), &remote) {
             Ok(app) => app,
             Err(e) => {
                 // Restore terminal before showing error
@@ -104,7 +111,8 @@ fn main() -> Result<()> {
             }
         }
     } else {
-        App::new(theme)?
+        // Normal local mode
+        App::new(theme, args.theme.clone())?
     };
     let mut ui = UI::new();
 
@@ -172,6 +180,7 @@ fn run_app<B: ratatui::backend::Backend>(
                     && elapsed < std::time::Duration::from_millis(200);
 
                 if !is_duplicate {
+                    // Process the key
                     last_key_code = Some(key.code);
                     last_event_time = now;
 

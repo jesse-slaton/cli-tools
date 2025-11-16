@@ -1,6 +1,7 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{layout::Rect, widgets::ScrollbarState};
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -11,7 +12,7 @@ use crate::registry::{self, PathScope, RemoteConnection};
 use crate::theme::Theme;
 
 /// Represents the connection mode of the application
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ConnectionMode {
     /// Local mode: Machine (left) and User (right) panels
     Local,
@@ -19,7 +20,7 @@ pub enum ConnectionMode {
     Remote,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Panel {
     Machine,
     User,
@@ -61,6 +62,7 @@ pub enum ConfirmAction {
     DeleteAllDead,
     DeleteAllDuplicates,
     ApplyChanges,
+    RequestElevation,
     RestoreBackup,
     CreateSingleDirectory,
     CreateMarkedDirectories,
@@ -74,7 +76,7 @@ pub enum InputMode {
     ConnectRemote,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FilterMode {
     None,
     Dead,
@@ -169,14 +171,16 @@ pub struct App {
     pub pending_directory: String, // Temporarily stores path for directory creation confirmation
     pub processes_to_restart: Vec<String>, // List of processes that need restarting to pick up PATH changes
     pub theme: Theme,                      // Color theme for UI rendering
-    pub filter_mode: FilterMode,           // Current filter mode (None, Dead, Duplicates, etc.)
-    pub filter_menu_selected: usize,       // Selected item in filter menu (0-4)
-    pub theme_list: Vec<(String, bool)>,   // List of available themes (name, is_builtin)
-    pub theme_selected: usize,             // Selected theme in the theme selector
-    pub undo_stack: Vec<Operation>,        // Stack of undoable operations
-    pub redo_stack: Vec<Operation>,        // Stack of redoable operations
-    last_click_time: std::time::Instant,   // Time of last mouse click for double-click detection
-    last_click_pos: (Panel, usize),        // Panel and row of last click
+    pub theme_arg: Option<String>, // Original theme argument from command line (for elevation)
+    pub filter_mode: FilterMode,   // Current filter mode (None, Dead, Duplicates, etc.)
+    pub filter_menu_selected: usize, // Selected item in filter menu (0-4)
+    pub theme_list: Vec<(String, bool)>, // List of available themes (name, is_builtin)
+    pub theme_selected: usize,     // Selected theme in the theme selector
+    pub undo_stack: Vec<Operation>, // Stack of undoable operations
+    pub redo_stack: Vec<Operation>, // Stack of redoable operations
+    last_click_time: std::time::Instant, // Time of last mouse click for double-click detection
+    last_click_pos: (Panel, usize), // Panel and row of last click
+    mode_enter_time: std::time::Instant, // Time when current mode was entered (for buffering protection)
     // File browser state
     pub file_browser_current_path: PathBuf, // Current directory being browsed
     pub file_browser_entries: Vec<DirectoryEntry>, // Directory entries in current path
@@ -185,7 +189,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(theme: Theme) -> Result<Self> {
+    pub fn new(theme: Theme, theme_arg: Option<String>) -> Result<Self> {
         let is_admin = permissions::is_admin();
 
         // Read paths from registry
@@ -233,6 +237,7 @@ impl App {
             pending_directory: String::new(),
             processes_to_restart: Vec::new(),
             theme,
+            theme_arg,
             filter_mode: FilterMode::None,
             filter_menu_selected: 0,
             theme_list: Vec::new(), // Will be populated when theme selector is opened
@@ -241,6 +246,7 @@ impl App {
             redo_stack: Vec::new(),
             last_click_time: std::time::Instant::now(),
             last_click_pos: (Panel::Machine, 0),
+            mode_enter_time: std::time::Instant::now(),
             file_browser_current_path: std::env::current_dir()
                 .unwrap_or_else(|_| PathBuf::from("C:\\")),
             file_browser_entries: Vec::new(),
@@ -250,9 +256,57 @@ impl App {
     }
 
     /// Create a new App with a remote connection
-    pub fn new_with_remote(theme: Theme, remote_computer: &str) -> Result<Self> {
-        let mut app = Self::new(theme)?;
+    pub fn new_with_remote(
+        theme: Theme,
+        theme_arg: Option<String>,
+        remote_computer: &str,
+    ) -> Result<Self> {
+        let mut app = Self::new(theme, theme_arg)?;
         app.connect_to_remote(remote_computer)?;
+        Ok(app)
+    }
+
+    /// Restore App from an elevation state (after UAC elevation)
+    pub fn from_elevation_state(
+        theme: Theme,
+        state: crate::elevation::ElevationState,
+    ) -> Result<Self> {
+        // Create a new app with the theme
+        let mut app = Self::new(theme, state.theme_arg.clone())?;
+
+        // Restore all state from elevation
+        app.connection_mode = state.connection_mode;
+        app.machine_paths = state.machine_paths;
+        app.user_paths = state.user_paths;
+        app.remote_machine_paths = state.remote_machine_paths;
+        app.active_panel = state.active_panel;
+        app.machine_selected = state.machine_selected;
+        app.user_selected = state.user_selected;
+        app.remote_machine_selected = state.remote_machine_selected;
+        app.machine_marked = state.machine_marked;
+        app.user_marked = state.user_marked;
+        app.remote_machine_marked = state.remote_machine_marked;
+        app.filter_mode = state.filter_mode;
+        app.input_buffer = state.input_buffer;
+        app.pending_directory = state.pending_directory;
+
+        // Restore remote connection if in remote mode
+        if app.connection_mode == ConnectionMode::Remote {
+            if let Some(ref computer_name) = state.remote_computer_name {
+                app.connect_to_remote(computer_name)?;
+            }
+        }
+
+        // Mark that we have changes (since we restored edited state)
+        app.has_changes =
+            app.machine_paths != app.machine_original || app.user_paths != app.user_original;
+
+        // Reanalyze paths
+        app.reanalyze();
+
+        // Update status message
+        app.set_status("Elevated successfully! You can now modify MACHINE paths.");
+
         Ok(app)
     }
 
@@ -420,7 +474,21 @@ impl App {
             // Save/Restore
             (KeyCode::Char('s'), KeyModifiers::CONTROL) => {
                 if self.has_changes {
-                    self.mode = Mode::Confirm(ConfirmAction::ApplyChanges);
+                    // Check if we need elevation for MACHINE path changes
+                    let needs_elevation = crate::elevation::needs_elevation_for_changes(
+                        self.is_admin,
+                        &self.machine_paths,
+                        &self.machine_original,
+                        &self.remote_machine_paths,
+                        &self.remote_machine_original,
+                        self.connection_mode,
+                    );
+
+                    if needs_elevation {
+                        self.mode = Mode::Confirm(ConfirmAction::RequestElevation);
+                    } else {
+                        self.mode = Mode::Confirm(ConfirmAction::ApplyChanges);
+                    }
                 } else {
                     self.set_status("No changes to save");
                 }
@@ -509,6 +577,10 @@ impl App {
                     ConfirmAction::DeleteAllDead => self.delete_all_dead()?,
                     ConfirmAction::DeleteAllDuplicates => self.delete_all_duplicates()?,
                     ConfirmAction::ApplyChanges => self.apply_changes()?,
+                    ConfirmAction::RequestElevation => {
+                        // Request UAC elevation and restart with elevated privileges
+                        self.request_elevation()?;
+                    }
                     ConfirmAction::RestoreBackup => self.restore_selected_backup()?,
                     ConfirmAction::CreateSingleDirectory => self.create_single_directory()?,
                     ConfirmAction::CreateMarkedDirectories => self.create_marked_directories()?,
@@ -529,7 +601,14 @@ impl App {
     fn handle_input_mode(&mut self, key: KeyEvent, input_mode: InputMode) -> Result<()> {
         match key.code {
             KeyCode::Enter => {
+                // Prevent buffered ENTER keys from immediately confirming (100ms grace period)
+                let elapsed = std::time::Instant::now().duration_since(self.mode_enter_time);
+                if elapsed < std::time::Duration::from_millis(100) {
+                    return Ok(());
+                }
+
                 self.mode = Mode::Normal;
+                self.mode_enter_time = std::time::Instant::now();
                 match input_mode {
                     InputMode::AddPath => self.add_path_from_input()?,
                     InputMode::EditPath => self.update_path_from_input()?,
@@ -557,6 +636,7 @@ impl App {
             }
             KeyCode::Esc => {
                 self.mode = Mode::Normal;
+                self.mode_enter_time = std::time::Instant::now();
                 self.input_buffer.clear();
             }
             KeyCode::Char(c) => {
@@ -655,6 +735,7 @@ impl App {
             KeyCode::Tab => {
                 // Tab: switch to manual text input mode
                 self.mode = Mode::Input(InputMode::AddPath);
+                self.mode_enter_time = std::time::Instant::now();
                 self.input_buffer = self.file_browser_current_path.to_string_lossy().to_string();
             }
             KeyCode::Esc | KeyCode::Char('q') => {
@@ -1133,6 +1214,9 @@ impl App {
                         ConfirmAction::DeleteAllDead => self.delete_all_dead()?,
                         ConfirmAction::DeleteAllDuplicates => self.delete_all_duplicates()?,
                         ConfirmAction::ApplyChanges => self.apply_changes()?,
+                        ConfirmAction::RequestElevation => {
+                            self.request_elevation()?;
+                        }
                         ConfirmAction::RestoreBackup => self.restore_selected_backup()?,
                         ConfirmAction::CreateSingleDirectory => self.create_single_directory()?,
                         ConfirmAction::CreateMarkedDirectories => {
@@ -1725,6 +1809,7 @@ impl App {
             if entry.path.to_string_lossy() == "NETWORK" {
                 // Switch to manual input mode for network path
                 self.mode = Mode::Input(InputMode::AddPath);
+                self.mode_enter_time = std::time::Instant::now();
                 self.input_buffer = "\\\\".to_string(); // Start with UNC prefix
                 return;
             }
@@ -1762,6 +1847,7 @@ impl App {
         if let Some(path) = current_path {
             self.input_buffer = path.clone();
             self.mode = Mode::Input(InputMode::EditPath);
+            self.mode_enter_time = std::time::Instant::now();
         }
     }
 
@@ -1789,10 +1875,6 @@ impl App {
         let new_path = self.input_buffer.clone();
         let (panel, index) = match self.active_panel {
             Panel::Machine => {
-                if !self.is_admin {
-                    self.set_status("Need admin rights to add MACHINE paths");
-                    return Ok(());
-                }
                 let idx = self.machine_paths.len();
                 self.machine_paths.push(new_path.clone());
                 (Panel::Machine, idx)
@@ -1827,10 +1909,6 @@ impl App {
 
         match self.active_panel {
             Panel::Machine => {
-                if !self.is_admin {
-                    self.set_status("Need admin rights to edit MACHINE paths");
-                    return Ok(());
-                }
                 if let Some(path) = self.machine_paths.get_mut(self.machine_selected) {
                     let old_path = path.clone();
                     *path = new_path.clone();
@@ -2055,10 +2133,6 @@ impl App {
                 // Directory created successfully - now add the path
                 match self.active_panel {
                     Panel::Machine => {
-                        if !self.is_admin {
-                            self.set_status("Need admin rights to add MACHINE paths");
-                            return Ok(());
-                        }
                         self.machine_paths.push(self.pending_directory.clone());
                     }
                     Panel::User => {
@@ -2215,6 +2289,57 @@ impl App {
                         .remote_scrollbar_state
                         .position(self.remote_machine_selected);
                 }
+            }
+        }
+    }
+
+    /// Request UAC elevation and restart the application with administrator privileges
+    fn request_elevation(&mut self) -> Result<()> {
+        // Build elevation state from current app state
+        let elevation_state = crate::elevation::ElevationState {
+            connection_mode: self.connection_mode,
+            remote_computer_name: self
+                .remote_connection
+                .as_ref()
+                .map(|c| c.computer_name().to_string()),
+            machine_paths: self.machine_paths.clone(),
+            user_paths: self.user_paths.clone(),
+            remote_machine_paths: self.remote_machine_paths.clone(),
+            active_panel: self.active_panel,
+            machine_selected: self.machine_selected,
+            user_selected: self.user_selected,
+            remote_machine_selected: self.remote_machine_selected,
+            machine_marked: self.machine_marked.clone(),
+            user_marked: self.user_marked.clone(),
+            remote_machine_marked: self.remote_machine_marked.clone(),
+            filter_mode: self.filter_mode,
+            input_buffer: self.input_buffer.clone(),
+            pending_directory: self.pending_directory.clone(),
+            theme_arg: self.theme_arg.clone(),
+        };
+
+        // Get current executable path
+        let current_exe = std::env::current_exe()
+            .context("Failed to get current executable path")?
+            .to_string_lossy()
+            .to_string();
+
+        // Request elevation (this will trigger UAC and restart the app)
+        match crate::elevation::request_elevation(&elevation_state, &current_exe) {
+            Ok(()) => {
+                // Elevation successful - the new elevated process is starting
+                // Exit this instance
+                self.should_exit = true;
+                self.set_status("Restarting with elevated privileges...");
+                Ok(())
+            }
+            Err(e) => {
+                // Elevation failed or was cancelled
+                self.set_status(&format!(
+                    "Elevation failed: {}. Continuing without elevation.",
+                    e
+                ));
+                Ok(())
             }
         }
     }
@@ -2710,6 +2835,7 @@ mod tests {
             pending_directory: String::new(),
             processes_to_restart: Vec::new(),
             theme: Theme::default(),
+            theme_arg: None,
             filter_mode: FilterMode::None,
             filter_menu_selected: 0,
             theme_list: Vec::new(),
@@ -2718,6 +2844,7 @@ mod tests {
             redo_stack: Vec::new(),
             last_click_time: std::time::Instant::now(),
             last_click_pos: (Panel::Machine, 0),
+            mode_enter_time: std::time::Instant::now(),
             file_browser_current_path: PathBuf::from("C:\\"),
             file_browser_entries: Vec::new(),
             file_browser_selected: 0,
