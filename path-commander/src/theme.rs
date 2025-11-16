@@ -451,21 +451,21 @@ impl Theme {
             name: "default".to_string(),
             colors: HashMap::new(),
 
-            // Panel colors
+            // Panel colors - MC uses blue background for panels
             panel_normal_fg: Color::White,
-            panel_normal_bg: Color::Black,
+            panel_normal_bg: Color::Blue,
             panel_selected_fg: Color::Black,
             panel_selected_bg: Color::Cyan,
             panel_marked_fg: Color::Yellow,
-            panel_marked_bg: Color::Black,
+            panel_marked_bg: Color::Blue,
             panel_border_fg: Color::White,
-            panel_border_bg: Color::Black,
+            panel_border_bg: Color::Blue,
 
             // Header and status
             header_fg: Color::White,
             header_bg: Color::Blue,
-            status_fg: Color::Black,
-            status_bg: Color::White,
+            status_fg: Color::White,
+            status_bg: Color::Black,
 
             // Dialog colors
             dialog_fg: Color::White,
@@ -501,29 +501,29 @@ impl Theme {
 
             // Path status colors
             path_valid_fg: Color::Green,
-            path_valid_bg: Color::Black,
+            path_valid_bg: Color::Blue,
             path_dead_fg: Color::Red,
-            path_dead_bg: Color::Black,
+            path_dead_bg: Color::Blue,
             path_duplicate_fg: Color::Yellow,
-            path_duplicate_bg: Color::Black,
+            path_duplicate_bg: Color::Blue,
             path_nonnormalized_fg: Color::Cyan,
-            path_nonnormalized_bg: Color::Black,
+            path_nonnormalized_bg: Color::Blue,
 
             // UI element colors
             scrollbar_fg: Color::DarkGray,
-            scrollbar_bg: Color::Black,
+            scrollbar_bg: Color::Blue,
             scrollbar_thumb_fg: Color::White,
-            scrollbar_thumb_bg: Color::Black,
+            scrollbar_thumb_bg: Color::Blue,
             filter_indicator_fg: Color::Cyan,
-            filter_indicator_bg: Color::Black,
+            filter_indicator_bg: Color::Blue,
             admin_warning_fg: Color::Yellow,
-            admin_warning_bg: Color::Black,
+            admin_warning_bg: Color::Blue,
 
             // Function key display (MC-style buttonbar)
-            function_key_number_fg: Color::White,
+            function_key_number_fg: Color::Black,
             function_key_number_bg: Color::Cyan,
-            function_key_label_fg: Color::Black,
-            function_key_label_bg: Color::White,
+            function_key_label_fg: Color::White,
+            function_key_label_bg: Color::Black,
         }
     }
 }

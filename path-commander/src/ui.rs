@@ -30,6 +30,14 @@ impl UI {
     }
 
     fn render_main(&self, f: &mut Frame, app: &App) {
+        // Set overall background to match MC's blue theme
+        let root_block = Block::default().style(
+            Style::default()
+                .fg(app.theme.panel_normal_fg)
+                .bg(app.theme.panel_normal_bg),
+        );
+        f.render_widget(root_block, f.area());
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -175,7 +183,13 @@ impl UI {
         let title = vec![Line::from(first_line_spans), Line::from(second_line_spans)];
 
         let header = Paragraph::new(title)
-            .block(Block::default().borders(Borders::ALL))
+            .block(
+                Block::default().borders(Borders::ALL).style(
+                    Style::default()
+                        .fg(app.theme.header_fg)
+                        .bg(app.theme.header_bg),
+                ),
+            )
             .alignment(Alignment::Left);
 
         f.render_widget(header, area);
@@ -270,7 +284,12 @@ impl UI {
         let block = Block::default()
             .title(title)
             .borders(Borders::ALL)
-            .border_style(border_style);
+            .border_style(border_style)
+            .style(
+                Style::default()
+                    .fg(app.theme.panel_normal_fg)
+                    .bg(app.theme.panel_normal_bg),
+            );
 
         // Only show filtered paths
         let items: Vec<ListItem> = filtered_indices
@@ -358,33 +377,76 @@ impl UI {
         let status_text = vec![Line::from(status_spans)];
 
         let status = Paragraph::new(status_text)
-            .block(Block::default().borders(Borders::ALL))
+            .block(
+                Block::default().borders(Borders::ALL).style(
+                    Style::default()
+                        .fg(app.theme.status_fg)
+                        .bg(app.theme.status_bg),
+                ),
+            )
             .alignment(Alignment::Left);
 
         f.render_widget(status, area);
     }
 
-    /// Helper to create MC-style function key display (e.g., "3View" instead of "F3 View")
-    /// Returns spans for the key number and label
-    fn mc_function_key(&self, key_num: &str, label: &str, theme: &Theme) -> Vec<Span<'static>> {
-        vec![
-            Span::styled(
+    /// Render function keys with even spacing across terminal width (MC-style)
+    fn render_evenly_spaced_keys(
+        &self,
+        keys: Vec<(&str, &str)>,
+        area: Rect,
+        theme: &Theme,
+    ) -> Line<'static> {
+        let available_width = area.width as usize;
+        let num_keys = keys.len();
+
+        if num_keys == 0 {
+            return Line::from(vec![]);
+        }
+
+        // Calculate total content width (without spacing)
+        let total_content_width: usize = keys
+            .iter()
+            .map(|(num, label)| num.len() + label.len())
+            .sum();
+
+        // Calculate total spacing to distribute
+        let total_spacing = available_width.saturating_sub(total_content_width);
+
+        // Distribute spacing evenly between keys
+        let spacing_per_gap = if num_keys > 1 {
+            total_spacing / (num_keys - 1)
+        } else {
+            0
+        };
+
+        let mut spans = Vec::new();
+        for (idx, (key_num, label)) in keys.iter().enumerate() {
+            // Add the key number span
+            spans.push(Span::styled(
                 key_num.to_string(),
                 Style::default()
                     .fg(theme.function_key_number_fg)
                     .bg(theme.function_key_number_bg),
-            ),
-            Span::styled(
+            ));
+            // Add the label span
+            spans.push(Span::styled(
                 label.to_string(),
                 Style::default()
                     .fg(theme.function_key_label_fg)
                     .bg(theme.function_key_label_bg),
-            ),
-        ]
+            ));
+
+            // Add spacing between keys (but not after the last key)
+            if idx < num_keys - 1 {
+                spans.push(Span::raw(" ".repeat(spacing_per_gap)));
+            }
+        }
+
+        Line::from(spans)
     }
 
     fn render_key_hints(&self, f: &mut Frame, area: Rect, app: &App) {
-        let hints = match app.mode {
+        let hints_line = match app.mode {
             Mode::Normal => {
                 use crate::app::FilterMode;
 
@@ -395,337 +457,85 @@ impl UI {
                 // Context-sensitive hints based on application state
                 if filter_active {
                     // When filter is active - show filter-related operations
-                    let mut hints_vec = Vec::new();
-                    hints_vec.extend(self.mc_function_key("1", "Help", &app.theme));
-                    hints_vec.push(Span::raw(" | "));
-                    hints_vec.push(Span::styled(
-                        "/",
-                        Style::default()
-                            .fg(app.theme.function_key_number_fg)
-                            .bg(app.theme.function_key_number_bg),
-                    ));
-                    hints_vec.push(Span::styled(
-                        "Clear Filter",
-                        Style::default()
-                            .fg(app.theme.function_key_label_fg)
-                            .bg(app.theme.function_key_label_bg),
-                    ));
-                    hints_vec.push(Span::raw(" | "));
-                    hints_vec.push(Span::styled(
-                        "Ctrl+A",
-                        Style::default()
-                            .fg(app.theme.function_key_number_fg)
-                            .bg(app.theme.function_key_number_bg),
-                    ));
-                    hints_vec.push(Span::styled(
-                        "Mark All",
-                        Style::default()
-                            .fg(app.theme.function_key_label_fg)
-                            .bg(app.theme.function_key_label_bg),
-                    ));
-                    hints_vec.push(Span::raw(" | "));
-                    hints_vec.extend(self.mc_function_key("3", "Del", &app.theme));
-                    hints_vec.push(Span::raw(" | "));
+                    let mut key_pairs = vec![
+                        ("1", "Help"),
+                        ("/", "Clear"),
+                        ("Ctrl+A", "MarkAll"),
+                        ("3", "Del"),
+                    ];
                     if app.can_undo() {
-                        hints_vec.push(Span::styled(
-                            "Ctrl+Z",
-                            Style::default()
-                                .fg(app.theme.function_key_number_fg)
-                                .bg(app.theme.function_key_number_bg),
-                        ));
-                        hints_vec.push(Span::styled(
-                            "Undo",
-                            Style::default()
-                                .fg(app.theme.function_key_label_fg)
-                                .bg(app.theme.function_key_label_bg),
-                        ));
-                        hints_vec.push(Span::raw(" | "));
+                        key_pairs.push(("Ctrl+Z", "Undo"));
                     }
                     if app.can_redo() {
-                        hints_vec.push(Span::styled(
-                            "Ctrl+Y",
-                            Style::default()
-                                .fg(app.theme.function_key_number_fg)
-                                .bg(app.theme.function_key_number_bg),
-                        ));
-                        hints_vec.push(Span::styled(
-                            "Redo",
-                            Style::default()
-                                .fg(app.theme.function_key_label_fg)
-                                .bg(app.theme.function_key_label_bg),
-                        ));
-                        hints_vec.push(Span::raw(" | "));
+                        key_pairs.push(("Ctrl+Y", "Redo"));
                     }
-                    hints_vec.push(Span::styled(
-                        "Ctrl+S",
-                        Style::default()
-                            .fg(app.theme.function_key_number_fg)
-                            .bg(app.theme.function_key_number_bg),
-                    ));
-                    hints_vec.push(Span::styled(
-                        "Save",
-                        Style::default()
-                            .fg(app.theme.function_key_label_fg)
-                            .bg(app.theme.function_key_label_bg),
-                    ));
-                    hints_vec.push(Span::raw(" | "));
-                    // Show Ctrl+E hint when not admin (filter active context)
+                    key_pairs.push(("Ctrl+S", "Save"));
                     if !app.is_admin {
-                        hints_vec.push(Span::styled(
-                            "Ctrl+E",
-                            Style::default()
-                                .fg(app.theme.function_key_number_fg)
-                                .bg(app.theme.function_key_number_bg),
-                        ));
-                        hints_vec.push(Span::styled(
-                            "Elevate",
-                            Style::default()
-                                .fg(app.theme.function_key_label_fg)
-                                .bg(app.theme.function_key_label_bg),
-                        ));
-                        hints_vec.push(Span::raw(" | "));
+                        key_pairs.push(("Ctrl+E", "Elevate"));
                     }
-                    hints_vec.push(Span::styled(
-                        "Q",
-                        Style::default()
-                            .fg(app.theme.function_key_number_fg)
-                            .bg(app.theme.function_key_number_bg),
-                    ));
-                    hints_vec.push(Span::styled(
-                        "Quit",
-                        Style::default()
-                            .fg(app.theme.function_key_label_fg)
-                            .bg(app.theme.function_key_label_bg),
-                    ));
-                    hints_vec
+                    key_pairs.push(("Q", "Quit"));
+                    self.render_evenly_spaced_keys(key_pairs, area, &app.theme)
                 } else if total_marked > 0 {
                     // When items are marked - show bulk operations
-                    let mut hints_vec = Vec::new();
-                    hints_vec.extend(self.mc_function_key("1", "Help", &app.theme));
-                    hints_vec.push(Span::raw(" | "));
-                    hints_vec.extend(self.mc_function_key("3", "Delete", &app.theme));
-                    hints_vec.push(Span::raw(" | "));
-                    hints_vec.extend(self.mc_function_key("5", "Move", &app.theme));
-                    hints_vec.push(Span::raw(" | "));
-                    hints_vec.extend(self.mc_function_key("9", "Normalize", &app.theme));
-                    hints_vec.push(Span::raw(" | "));
+                    let mut key_pairs = vec![
+                        ("1", "Help"),
+                        ("3", "Delete"),
+                        ("5", "Move"),
+                        ("9", "Normalize"),
+                    ];
                     if app.can_undo() {
-                        hints_vec.push(Span::styled(
-                            "Ctrl+Z",
-                            Style::default()
-                                .fg(app.theme.function_key_number_fg)
-                                .bg(app.theme.function_key_number_bg),
-                        ));
-                        hints_vec.push(Span::styled(
-                            "Undo",
-                            Style::default()
-                                .fg(app.theme.function_key_label_fg)
-                                .bg(app.theme.function_key_label_bg),
-                        ));
-                        hints_vec.push(Span::raw(" | "));
+                        key_pairs.push(("Ctrl+Z", "Undo"));
                     }
                     if app.can_redo() {
-                        hints_vec.push(Span::styled(
-                            "Ctrl+Y",
-                            Style::default()
-                                .fg(app.theme.function_key_number_fg)
-                                .bg(app.theme.function_key_number_bg),
-                        ));
-                        hints_vec.push(Span::styled(
-                            "Redo",
-                            Style::default()
-                                .fg(app.theme.function_key_label_fg)
-                                .bg(app.theme.function_key_label_bg),
-                        ));
-                        hints_vec.push(Span::raw(" | "));
+                        key_pairs.push(("Ctrl+Y", "Redo"));
                     }
-                    hints_vec.push(Span::styled(
-                        "Ctrl+Shift+U",
-                        Style::default()
-                            .fg(app.theme.function_key_number_fg)
-                            .bg(app.theme.function_key_number_bg),
-                    ));
-                    hints_vec.push(Span::styled(
-                        "Unmark All",
-                        Style::default()
-                            .fg(app.theme.function_key_label_fg)
-                            .bg(app.theme.function_key_label_bg),
-                    ));
-                    hints_vec.push(Span::raw(" | "));
-                    hints_vec.push(Span::styled(
-                        "Ctrl+S",
-                        Style::default()
-                            .fg(app.theme.function_key_number_fg)
-                            .bg(app.theme.function_key_number_bg),
-                    ));
-                    hints_vec.push(Span::styled(
-                        "Save",
-                        Style::default()
-                            .fg(app.theme.function_key_label_fg)
-                            .bg(app.theme.function_key_label_bg),
-                    ));
-                    hints_vec.push(Span::raw(" | "));
-                    // Show Ctrl+E hint when not admin (marked items context)
+                    key_pairs.push(("Ctrl+Shift+U", "Unmark"));
+                    key_pairs.push(("Ctrl+S", "Save"));
                     if !app.is_admin {
-                        hints_vec.push(Span::styled(
-                            "Ctrl+E",
-                            Style::default()
-                                .fg(app.theme.function_key_number_fg)
-                                .bg(app.theme.function_key_number_bg),
-                        ));
-                        hints_vec.push(Span::styled(
-                            "Elevate",
-                            Style::default()
-                                .fg(app.theme.function_key_label_fg)
-                                .bg(app.theme.function_key_label_bg),
-                        ));
-                        hints_vec.push(Span::raw(" | "));
+                        key_pairs.push(("Ctrl+E", "Elevate"));
                     }
-                    hints_vec.push(Span::styled(
-                        "Q",
-                        Style::default()
-                            .fg(app.theme.function_key_number_fg)
-                            .bg(app.theme.function_key_number_bg),
-                    ));
-                    hints_vec.push(Span::styled(
-                        "Quit",
-                        Style::default()
-                            .fg(app.theme.function_key_label_fg)
-                            .bg(app.theme.function_key_label_bg),
-                    ));
-                    hints_vec
+                    key_pairs.push(("Q", "Quit"));
+                    self.render_evenly_spaced_keys(key_pairs, area, &app.theme)
                 } else {
                     // Normal mode - default hints with more discoverable features
-                    let mut hints_vec = Vec::new();
-                    hints_vec.extend(self.mc_function_key("1", "Help", &app.theme));
-                    hints_vec.push(Span::raw(" | "));
-                    hints_vec.extend(self.mc_function_key("2", "Mark", &app.theme));
-                    hints_vec.push(Span::raw(" | "));
-                    hints_vec.extend(self.mc_function_key("3", "Del", &app.theme));
-                    hints_vec.push(Span::raw(" | "));
-                    hints_vec.extend(self.mc_function_key("4", "Add", &app.theme));
-                    hints_vec.push(Span::raw(" | "));
-                    hints_vec.push(Span::styled(
-                        "/",
-                        Style::default()
-                            .fg(app.theme.function_key_number_fg)
-                            .bg(app.theme.function_key_number_bg),
-                    ));
-                    hints_vec.push(Span::styled(
-                        "Filter",
-                        Style::default()
-                            .fg(app.theme.function_key_label_fg)
-                            .bg(app.theme.function_key_label_bg),
-                    ));
-                    hints_vec.push(Span::raw(" | "));
+                    let mut key_pairs = vec![
+                        ("1", "Help"),
+                        ("2", "Mark"),
+                        ("3", "Del"),
+                        ("4", "Add"),
+                        ("/", "Filter"),
+                    ];
                     if app.can_undo() {
-                        hints_vec.push(Span::styled(
-                            "Ctrl+Z",
-                            Style::default()
-                                .fg(app.theme.function_key_number_fg)
-                                .bg(app.theme.function_key_number_bg),
-                        ));
-                        hints_vec.push(Span::styled(
-                            "Undo",
-                            Style::default()
-                                .fg(app.theme.function_key_label_fg)
-                                .bg(app.theme.function_key_label_bg),
-                        ));
-                        hints_vec.push(Span::raw(" | "));
+                        key_pairs.push(("Ctrl+Z", "Undo"));
                     }
                     if app.can_redo() {
-                        hints_vec.push(Span::styled(
-                            "Ctrl+Y",
-                            Style::default()
-                                .fg(app.theme.function_key_number_fg)
-                                .bg(app.theme.function_key_number_bg),
-                        ));
-                        hints_vec.push(Span::styled(
-                            "Redo",
-                            Style::default()
-                                .fg(app.theme.function_key_label_fg)
-                                .bg(app.theme.function_key_label_bg),
-                        ));
-                        hints_vec.push(Span::raw(" | "));
+                        key_pairs.push(("Ctrl+Y", "Redo"));
                     }
-                    hints_vec.push(Span::styled(
-                        "Ctrl+S",
-                        Style::default()
-                            .fg(app.theme.function_key_number_fg)
-                            .bg(app.theme.function_key_number_bg),
-                    ));
-                    hints_vec.push(Span::styled(
-                        "Save",
-                        Style::default()
-                            .fg(app.theme.function_key_label_fg)
-                            .bg(app.theme.function_key_label_bg),
-                    ));
-                    hints_vec.push(Span::raw(" | "));
+                    key_pairs.push(("Ctrl+S", "Save"));
                     // Show Ctrl+E hint when not admin
                     if !app.is_admin {
-                        hints_vec.push(Span::styled(
-                            "Ctrl+E",
-                            Style::default()
-                                .fg(app.theme.function_key_number_fg)
-                                .bg(app.theme.function_key_number_bg),
-                        ));
-                        hints_vec.push(Span::styled(
-                            "Elevate",
-                            Style::default()
-                                .fg(app.theme.function_key_label_fg)
-                                .bg(app.theme.function_key_label_bg),
-                        ));
-                        hints_vec.push(Span::raw(" | "));
+                        key_pairs.push(("Ctrl+E", "Elevate"));
                     }
                     // Show Ctrl+O hint when in remote mode
-                    if let Some(ref conn) = app.remote_connection {
-                        hints_vec.push(Span::styled(
-                            "Ctrl+O",
-                            Style::default()
-                                .fg(app.theme.function_key_number_fg)
-                                .bg(app.theme.function_key_number_bg),
-                        ));
-                        hints_vec.push(Span::styled(
-                            format!("Disconnect({})", conn.computer_name()),
-                            Style::default()
-                                .fg(app.theme.function_key_label_fg)
-                                .bg(app.theme.function_key_label_bg),
-                        ));
-                        hints_vec.push(Span::raw(" | "));
+                    if app.remote_connection.is_some() {
+                        key_pairs.push(("Ctrl+O", "Disconnect"));
                     }
-                    hints_vec.push(Span::styled(
-                        "Q",
-                        Style::default()
-                            .fg(app.theme.function_key_number_fg)
-                            .bg(app.theme.function_key_number_bg),
-                    ));
-                    hints_vec.push(Span::styled(
-                        "Quit",
-                        Style::default()
-                            .fg(app.theme.function_key_label_fg)
-                            .bg(app.theme.function_key_label_bg),
-                    ));
-                    hints_vec
+                    key_pairs.push(("Q", "Quit"));
+
+                    self.render_evenly_spaced_keys(key_pairs, area, &app.theme)
                 }
             }
-            _ => vec![
-                Span::styled(
-                    "ESC",
-                    Style::default()
-                        .fg(app.theme.function_key_number_fg)
-                        .bg(app.theme.function_key_number_bg),
-                ),
-                Span::styled(
-                    "Cancel",
-                    Style::default()
-                        .fg(app.theme.function_key_label_fg)
-                        .bg(app.theme.function_key_label_bg),
-                ),
-            ],
+            _ => {
+                let key_pairs = vec![("ESC", "Cancel")];
+                self.render_evenly_spaced_keys(key_pairs, area, &app.theme)
+            }
         };
 
-        let hints_line = Line::from(hints);
-        let paragraph = Paragraph::new(hints_line).alignment(Alignment::Center);
+        let paragraph = Paragraph::new(hints_line).alignment(Alignment::Left).style(
+            Style::default()
+                .fg(app.theme.function_key_label_fg)
+                .bg(app.theme.function_key_label_bg),
+        );
 
         f.render_widget(paragraph, area);
     }
