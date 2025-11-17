@@ -196,8 +196,8 @@ fn run_app<B: ratatui::backend::Backend>(
                                 app.handle_input(key)?;
                             }
                         }
-                        (KeyCode::F(10), _) | (KeyCode::Esc, _) => {
-                            // Only handle ESC/F10 as quit in Normal mode
+                        (KeyCode::F(10), _) => {
+                            // Only handle F10 as quit in Normal mode
                             if matches!(app.mode, app::Mode::Normal) {
                                 app.confirm_exit();
                             } else {
