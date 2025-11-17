@@ -842,8 +842,8 @@ impl UI {
     }
 
     fn render_about(&self, f: &mut Frame, app: &App) {
-        // Create a centered dialog area
-        let area = centered_rect(60, 50, f.area());
+        // Create a centered dialog area (smaller to fit the simplified content)
+        let area = centered_rect(50, 35, f.area());
         f.render_widget(ratatui::widgets::Clear, area);
 
         // Create outer block with title
@@ -869,7 +869,7 @@ impl UI {
         let inner_area = outer_block.inner(area);
         f.render_widget(outer_block, area);
 
-        // Build content
+        // Build content with Alignment::Center
         let content = vec![
             Line::from(vec![
                 Span::styled(
@@ -885,28 +885,7 @@ impl UI {
             Line::from(""),
             Line::from("Copyright © 2025 Jesse Slaton"),
             Line::from(""),
-            Line::from(""),
             Line::from("License: MIT License"),
-            Line::from(Span::styled(
-                make_hyperlink(
-                    "https://opensource.org/licenses/MIT",
-                    "https://opensource.org/licenses/MIT",
-                ),
-                Style::default()
-                    .fg(app.theme.help_link_fg)
-                    .add_modifier(Modifier::UNDERLINED),
-            )),
-            Line::from(""),
-            Line::from("Project Repository:"),
-            Line::from(Span::styled(
-                make_hyperlink(
-                    "https://github.com/jesse-slaton/cli-tools",
-                    "https://github.com/jesse-slaton/cli-tools",
-                ),
-                Style::default()
-                    .fg(app.theme.help_link_fg)
-                    .add_modifier(Modifier::UNDERLINED),
-            )),
             Line::from(""),
             Line::from(""),
             Line::from(Span::styled(
@@ -1796,10 +1775,4 @@ impl UI {
         // Render the menu
         f.render_widget(menu_list, area);
     }
-}
-
-/// Create a clickable hyperlink using OSC 8 escape sequences
-/// Supported by modern terminals like Windows Terminal, iTerm2, etc.
-fn make_hyperlink(url: &str, text: &str) -> String {
-    format!("\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\", url, text)
 }
