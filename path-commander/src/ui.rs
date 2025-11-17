@@ -885,28 +885,28 @@ impl UI {
             Line::from(""),
             Line::from("Copyright © 2025 Jesse Slaton"),
             Line::from(""),
-            Line::from(vec![
-                Span::raw("License: "),
-                Span::styled(
-                    make_hyperlink("https://opensource.org/licenses/MIT", "MIT License"),
-                    Style::default()
-                        .fg(app.theme.help_link_fg)
-                        .add_modifier(Modifier::UNDERLINED),
-                ),
-            ]),
             Line::from(""),
-            Line::from(vec![
-                Span::raw("Project: "),
-                Span::styled(
-                    make_hyperlink(
-                        "https://github.com/jesse-slaton/cli-tools",
-                        "github.com/jesse-slaton/cli-tools",
-                    ),
-                    Style::default()
-                        .fg(app.theme.help_link_fg)
-                        .add_modifier(Modifier::UNDERLINED),
+            Line::from("License: MIT License"),
+            Line::from(Span::styled(
+                make_hyperlink(
+                    "https://opensource.org/licenses/MIT",
+                    "https://opensource.org/licenses/MIT",
                 ),
-            ]),
+                Style::default()
+                    .fg(app.theme.help_link_fg)
+                    .add_modifier(Modifier::UNDERLINED),
+            )),
+            Line::from(""),
+            Line::from("Project Repository:"),
+            Line::from(Span::styled(
+                make_hyperlink(
+                    "https://github.com/jesse-slaton/cli-tools",
+                    "https://github.com/jesse-slaton/cli-tools",
+                ),
+                Style::default()
+                    .fg(app.theme.help_link_fg)
+                    .add_modifier(Modifier::UNDERLINED),
+            )),
             Line::from(""),
             Line::from(""),
             Line::from(Span::styled(
