@@ -21,6 +21,7 @@ impl UI {
     pub fn render(&self, f: &mut Frame, app: &App) {
         match app.mode {
             Mode::Help => self.render_help(f, app),
+            Mode::About => self.render_about(f, app),
             Mode::Confirm(action) => self.render_confirm(f, app, action),
             Mode::BackupList => self.render_backup_list(f, app),
             Mode::ProcessRestartInfo => self.render_process_restart_info(f, app),
@@ -50,7 +51,7 @@ impl UI {
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(1), // Menu bar
-                Constraint::Length(3), // Header
+                Constraint::Length(1), // Header (statistics only)
                 Constraint::Min(0),    // Main content
                 Constraint::Length(3), // Status bar
                 Constraint::Length(2), // Key hints
@@ -164,43 +165,36 @@ impl UI {
             },
         ));
 
-        // Build first line with connection mode indicator
-        let mut first_line_spans = vec![
-            Span::styled(
-                "Path Commander",
-                Style::default()
-                    .fg(app.theme.header_fg)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(" - Windows PATH Environment Manager"),
-        ];
-
         // Add connection mode indicator if in remote mode
         if let Some(ref connection) = app.remote_connection {
-            first_line_spans.push(Span::raw(" │ "));
-            first_line_spans.push(Span::styled(
-                "REMOTE: ",
-                Style::default()
-                    .fg(app.theme.path_duplicate_fg)
-                    .add_modifier(Modifier::BOLD),
-            ));
-            first_line_spans.push(Span::styled(
-                connection.computer_name(),
-                Style::default()
-                    .fg(app.theme.path_valid_fg)
-                    .add_modifier(Modifier::BOLD),
-            ));
+            second_line_spans.insert(0, Span::raw(" "));
+            second_line_spans.insert(
+                0,
+                Span::styled(
+                    connection.computer_name(),
+                    Style::default()
+                        .fg(app.theme.path_valid_fg)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            );
+            second_line_spans.insert(
+                0,
+                Span::styled(
+                    "REMOTE: ",
+                    Style::default()
+                        .fg(app.theme.path_duplicate_fg)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            );
         }
 
-        let title = vec![Line::from(first_line_spans), Line::from(second_line_spans)];
+        let header_line = Line::from(second_line_spans);
 
-        let header = Paragraph::new(title)
-            .block(
-                Block::default().borders(Borders::ALL).style(
-                    Style::default()
-                        .fg(app.theme.header_fg)
-                        .bg(app.theme.header_bg),
-                ),
+        let header = Paragraph::new(header_line)
+            .style(
+                Style::default()
+                    .fg(app.theme.header_fg)
+                    .bg(app.theme.header_bg),
             )
             .alignment(Alignment::Left);
 
@@ -845,6 +839,88 @@ impl UI {
         let area = centered_rect(80, 80, f.area());
         f.render_widget(ratatui::widgets::Clear, area);
         f.render_widget(info, area);
+    }
+
+    fn render_about(&self, f: &mut Frame, app: &App) {
+        // Create a centered dialog area
+        let area = centered_rect(60, 50, f.area());
+        f.render_widget(ratatui::widgets::Clear, area);
+
+        // Create outer block with title
+        let outer_block = Block::default()
+            .title("About Path Commander")
+            .title_style(
+                Style::default()
+                    .fg(app.theme.dialog_title_fg)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .borders(Borders::ALL)
+            .border_style(
+                Style::default()
+                    .fg(app.theme.dialog_border_fg)
+                    .bg(app.theme.dialog_bg),
+            )
+            .style(
+                Style::default()
+                    .fg(app.theme.dialog_fg)
+                    .bg(app.theme.dialog_bg),
+            );
+
+        let inner_area = outer_block.inner(area);
+        f.render_widget(outer_block, area);
+
+        // Build content
+        let content = vec![
+            Line::from(vec![
+                Span::styled(
+                    "Path Commander",
+                    Style::default()
+                        .fg(app.theme.dialog_title_fg)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw("  v0.1.0"),
+            ]),
+            Line::from(""),
+            Line::from("Windows PATH Environment Manager"),
+            Line::from(""),
+            Line::from("Copyright © 2025 Jesse Slaton"),
+            Line::from(""),
+            Line::from(vec![
+                Span::raw("License: "),
+                Span::styled(
+                    "MIT License",
+                    Style::default()
+                        .fg(app.theme.help_link_fg)
+                        .add_modifier(Modifier::UNDERLINED),
+                ),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::raw("Project: "),
+                Span::styled(
+                    "github.com/jesse-slaton/cli-tools",
+                    Style::default()
+                        .fg(app.theme.help_link_fg)
+                        .add_modifier(Modifier::UNDERLINED),
+                ),
+            ]),
+            Line::from(""),
+            Line::from(""),
+            Line::from(Span::styled(
+                "Press Esc or Enter to close",
+                Style::default().fg(app.theme.dialog_fg),
+            )),
+        ];
+
+        let paragraph = Paragraph::new(content)
+            .style(
+                Style::default()
+                    .fg(app.theme.dialog_fg)
+                    .bg(app.theme.dialog_bg),
+            )
+            .alignment(Alignment::Center);
+
+        f.render_widget(paragraph, inner_area);
     }
 
     fn render_confirm(&self, f: &mut Frame, app: &App, action: ConfirmAction) {

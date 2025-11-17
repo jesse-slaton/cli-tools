@@ -46,6 +46,7 @@ impl Panel {
 pub enum Mode {
     Normal,
     Help,
+    About,
     Confirm(ConfirmAction),
     Input(InputMode),
     BackupList,
@@ -374,18 +375,19 @@ impl App {
     }
 
     /// Update viewport height based on terminal size
-    /// Calculates visible lines in panel: terminal_height - header(3) - status(3) - hints(2) - borders(2)
+    /// Calculates visible lines in panel: terminal_height - menu(1) - header(1) - status(3) - hints(2) - borders(2)
     pub fn update_viewport_height(&mut self, terminal_height: u16) {
-        // Layout: Header(3) + Content + Status(3) + Hints(2)
+        // Layout: Menu(1) + Header(1) + Content + Status(3) + Hints(2)
         // Panel has top and bottom borders (2)
-        // Viewport = terminal_height - 3 - 3 - 2 - 2 = terminal_height - 10
-        self.viewport_height = terminal_height.saturating_sub(10).max(1);
+        // Viewport = terminal_height - 1 - 1 - 3 - 2 - 2 = terminal_height - 9
+        self.viewport_height = terminal_height.saturating_sub(9).max(1);
     }
 
     pub fn handle_input(&mut self, key: KeyEvent) -> Result<()> {
         match self.mode {
             Mode::Normal => self.handle_normal_input(key),
             Mode::Help => self.handle_help_input(key),
+            Mode::About => self.handle_about_input(key),
             Mode::Confirm(action) => self.handle_confirm_input(key, action),
             Mode::Input(input_mode) => self.handle_input_mode(key, input_mode),
             Mode::BackupList => self.handle_backup_list_input(key),
@@ -570,6 +572,16 @@ impl App {
     fn handle_help_input(&mut self, key: KeyEvent) -> Result<()> {
         match key.code {
             KeyCode::Esc | KeyCode::F(1) | KeyCode::Char('q') => {
+                self.mode = Mode::Normal;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn handle_about_input(&mut self, key: KeyEvent) -> Result<()> {
+        match key.code {
+            KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') => {
                 self.mode = Mode::Normal;
             }
             _ => {}
@@ -3080,7 +3092,7 @@ impl App {
                 self.mode = Mode::Help;
             }
             MenuAction::About => {
-                self.set_status("Path Commander - Windows PATH environment variable manager");
+                self.mode = Mode::About;
             }
         }
 
@@ -3478,12 +3490,12 @@ mod tests {
     fn test_update_viewport_height() {
         let mut app = create_test_app(vec![], vec![]);
 
-        // Viewport height = terminal_height - 10 (for UI elements)
+        // Viewport height = terminal_height - 9 (for UI elements)
         app.update_viewport_height(30);
-        assert_eq!(app.viewport_height, 20); // 30 - 10
+        assert_eq!(app.viewport_height, 21); // 30 - 9
 
         app.update_viewport_height(50);
-        assert_eq!(app.viewport_height, 40); // 50 - 10
+        assert_eq!(app.viewport_height, 41); // 50 - 9
     }
 
     #[test]
