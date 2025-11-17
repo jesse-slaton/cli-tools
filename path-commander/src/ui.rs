@@ -375,6 +375,53 @@ impl UI {
             status_spans.push(Span::raw(" │ "));
         }
 
+        // Add PATH length indicators for both panels
+        const PATH_LIMIT: usize = 2047;
+
+        // Machine/Left panel PATH length
+        let machine_length = app.calculate_path_length(Panel::Machine);
+        let machine_label = match app.connection_mode {
+            crate::app::ConnectionMode::Local => "MACHINE",
+            crate::app::ConnectionMode::Remote => "LOCAL",
+        };
+
+        if machine_length > PATH_LIMIT {
+            status_spans.push(Span::styled(
+                format!("{}: {}/{} ⚠", machine_label, machine_length, PATH_LIMIT),
+                Style::default()
+                    .fg(app.theme.path_dead_fg)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        } else {
+            status_spans.push(Span::styled(
+                format!("{}: {}/{}", machine_label, machine_length, PATH_LIMIT),
+                Style::default().fg(app.theme.status_fg),
+            ));
+        }
+        status_spans.push(Span::raw(" │ "));
+
+        // User/Right panel PATH length
+        let user_length = app.calculate_path_length(Panel::User);
+        let user_label = match app.connection_mode {
+            crate::app::ConnectionMode::Local => "USER",
+            crate::app::ConnectionMode::Remote => "REMOTE",
+        };
+
+        if user_length > PATH_LIMIT {
+            status_spans.push(Span::styled(
+                format!("{}: {}/{} ⚠", user_label, user_length, PATH_LIMIT),
+                Style::default()
+                    .fg(app.theme.path_dead_fg)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        } else {
+            status_spans.push(Span::styled(
+                format!("{}: {}/{}", user_label, user_length, PATH_LIMIT),
+                Style::default().fg(app.theme.status_fg),
+            ));
+        }
+        status_spans.push(Span::raw(" │ "));
+
         status_spans.push(Span::styled(
             &app.status_message,
             Style::default().fg(app.theme.status_fg),

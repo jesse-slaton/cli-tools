@@ -2601,6 +2601,27 @@ impl App {
         }
     }
 
+    /// Calculate the total PATH length for a given scope
+    /// Returns the total character count including semicolon separators
+    /// Windows PATH limit is 2047 characters
+    pub fn calculate_path_length(&self, panel: Panel) -> usize {
+        let paths = match (self.connection_mode, panel) {
+            (ConnectionMode::Local, Panel::Machine) => &self.machine_paths,
+            (ConnectionMode::Local, Panel::User) => &self.user_paths,
+            (ConnectionMode::Remote, Panel::Machine) => &self.machine_paths,
+            (ConnectionMode::Remote, Panel::User) => &self.remote_machine_paths,
+        };
+
+        if paths.is_empty() {
+            return 0;
+        }
+
+        // Calculate total length: sum of all path lengths + (n-1) semicolons
+        let total_chars: usize = paths.iter().map(|p| p.len()).sum();
+        let separators = paths.len().saturating_sub(1);
+        total_chars + separators
+    }
+
     /// Undo the last operation by popping from the undo stack and reversing it
     pub fn undo(&mut self) -> Result<()> {
         if let Some(operation) = self.undo_stack.pop() {
@@ -3633,5 +3654,48 @@ mod tests {
 
         app.active_panel = Panel::Machine;
         assert!(app.has_marked_items());
+    }
+
+    #[test]
+    fn test_calculate_path_length() {
+        // Test empty paths
+        let app = create_test_app(vec![], vec![]);
+        assert_eq!(app.calculate_path_length(Panel::Machine), 0);
+        assert_eq!(app.calculate_path_length(Panel::User), 0);
+
+        // Test single path (no separators)
+        let app = create_test_app(vec![r"C:\Windows".to_string()], vec![]);
+        assert_eq!(app.calculate_path_length(Panel::Machine), 10); // "C:\Windows".len()
+        assert_eq!(app.calculate_path_length(Panel::User), 0);
+
+        // Test multiple paths with separators
+        // "C:\Windows" (10) + ";" (1) + "C:\Program Files" (16) = 27
+        let app = create_test_app(
+            vec![r"C:\Windows".to_string(), r"C:\Program Files".to_string()],
+            vec![],
+        );
+        assert_eq!(app.calculate_path_length(Panel::Machine), 27);
+
+        // Test both panels with different lengths
+        // Machine: "C:\A" (4) + ";" + "C:\B" (4) = 9
+        // User: "C:\User\Path" (12) + ";" + "C:\Another" (10) + ";" + "C:\Third" (8) = 32
+        let app = create_test_app(
+            vec![r"C:\A".to_string(), r"C:\B".to_string()],
+            vec![
+                r"C:\User\Path".to_string(),
+                r"C:\Another".to_string(),
+                r"C:\Third".to_string(),
+            ],
+        );
+        assert_eq!(app.calculate_path_length(Panel::Machine), 9);
+        assert_eq!(app.calculate_path_length(Panel::User), 32);
+
+        // Test path that exceeds Windows limit
+        // Create a path string that's longer than 2047 characters
+        let long_path = "C:\\".to_string() + &"VeryLongDirectoryName".repeat(100);
+        let app = create_test_app(vec![long_path.clone()], vec![]);
+        let length = app.calculate_path_length(Panel::Machine);
+        assert!(length > 2047, "Path length {} should exceed 2047", length);
+        assert_eq!(length, long_path.len());
     }
 }
