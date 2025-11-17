@@ -1536,12 +1536,12 @@ impl UI {
             // Style based on whether menu is active
             let style = if is_active {
                 Style::default()
-                    .fg(app.theme.button_focused_fg)
-                    .bg(app.theme.button_focused_bg)
+                    .fg(app.theme.menu_selected_fg)
+                    .bg(app.theme.menu_selected_bg)
             } else {
                 Style::default()
-                    .fg(app.theme.header_fg)
-                    .bg(app.theme.header_bg)
+                    .fg(app.theme.menu_inactive_fg)
+                    .bg(app.theme.menu_inactive_bg)
             };
 
             // Add space before menu name
@@ -1580,8 +1580,8 @@ impl UI {
         let menu_line = Line::from(spans);
         let menu_bar = Paragraph::new(menu_line).style(
             Style::default()
-                .fg(app.theme.header_fg)
-                .bg(app.theme.header_bg),
+                .fg(app.theme.menu_inactive_fg)
+                .bg(app.theme.menu_inactive_bg),
         );
         f.render_widget(menu_bar, area);
     }
@@ -1669,15 +1669,15 @@ impl UI {
                 let fg = if !is_enabled {
                     app.theme.button_disabled_fg
                 } else if is_selected {
-                    app.theme.panel_selected_fg
+                    app.theme.menu_selected_fg
                 } else {
-                    app.theme.dialog_fg
+                    app.theme.menu_active_fg
                 };
 
                 let bg = if is_selected {
-                    app.theme.panel_selected_bg
+                    app.theme.menu_selected_bg
                 } else {
-                    app.theme.dialog_bg
+                    app.theme.menu_active_bg
                 };
 
                 // Format: "Label          Shortcut"
@@ -1696,21 +1696,21 @@ impl UI {
                 .borders(Borders::ALL)
                 .border_style(
                     Style::default()
-                        .fg(app.theme.dialog_border_fg)
-                        .bg(app.theme.dialog_bg),
+                        .fg(app.theme.menu_active_fg)
+                        .bg(app.theme.menu_active_bg),
                 )
                 .style(
                     Style::default()
-                        .fg(app.theme.dialog_fg)
-                        .bg(app.theme.dialog_bg),
+                        .fg(app.theme.menu_active_fg)
+                        .bg(app.theme.menu_active_bg),
                 ),
         );
 
         // Clear background behind menu (draw a filled rectangle)
         let clear_block = Block::default().style(
             Style::default()
-                .fg(app.theme.dialog_fg)
-                .bg(app.theme.dialog_bg),
+                .fg(app.theme.menu_active_fg)
+                .bg(app.theme.menu_active_bg),
         );
         f.render_widget(clear_block, area);
 

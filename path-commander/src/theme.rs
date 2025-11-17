@@ -85,6 +85,16 @@ pub struct Theme {
     pub function_key_number_bg: Color,
     pub function_key_label_fg: Color,
     pub function_key_label_bg: Color,
+
+    // Menu colors (MC [menu] section)
+    pub menu_inactive_fg: Color,
+    pub menu_inactive_bg: Color,
+    pub menu_active_fg: Color,
+    pub menu_active_bg: Color,
+    pub menu_selected_fg: Color,
+    pub menu_selected_bg: Color,
+    pub menu_hotkey_fg: Color,
+    pub menu_hotkey_selected_fg: Color,
 }
 
 impl Theme {
@@ -175,6 +185,17 @@ impl Theme {
             get_color_pair("buttonbar", "hotkey", Color::White, panel_selected_bg);
         let (buttonbar_button_fg, buttonbar_button_bg) =
             get_color_pair("buttonbar", "button", status_fg, status_bg);
+
+        // Parse [menu] section (MC menu bar and dropdown)
+        let (menu_inactive_fg, menu_inactive_bg) =
+            get_color_pair("menu", "menuinactive", header_fg, header_bg);
+        let (menu_active_fg, menu_active_bg) =
+            get_color_pair("menu", "_default_", dialog_fg, dialog_bg);
+        let (menu_selected_fg, menu_selected_bg) =
+            get_color_pair("menu", "menusel", Color::White, panel_selected_bg);
+        let menu_hotkey_fg = get_color_pair("menu", "menuhot", Color::White, menu_active_bg).0;
+        let menu_hotkey_selected_fg =
+            get_color_pair("menu", "menuhotsel", Color::White, menu_selected_bg).0;
 
         // Parse [pathcommander] section (Path Commander specific)
         // If not present, fall back to MC's [filehighlight] and [error] sections for intelligent defaults
@@ -395,6 +416,16 @@ impl Theme {
             function_key_number_bg: buttonbar_hotkey_bg,
             function_key_label_fg: buttonbar_button_fg,
             function_key_label_bg: buttonbar_button_bg,
+
+            // Menu colors
+            menu_inactive_fg,
+            menu_inactive_bg,
+            menu_active_fg,
+            menu_active_bg,
+            menu_selected_fg,
+            menu_selected_bg,
+            menu_hotkey_fg,
+            menu_hotkey_selected_fg,
         }
     }
 
@@ -524,6 +555,16 @@ impl Theme {
             function_key_number_bg: Color::Cyan,
             function_key_label_fg: Color::White,
             function_key_label_bg: Color::Black,
+
+            // Menu colors
+            menu_inactive_fg: Color::White,
+            menu_inactive_bg: Color::Black,
+            menu_active_fg: Color::White,
+            menu_active_bg: Color::Black,
+            menu_selected_fg: Color::White,
+            menu_selected_bg: Color::Cyan,
+            menu_hotkey_fg: Color::LightCyan,
+            menu_hotkey_selected_fg: Color::White,
         }
     }
 }
