@@ -888,7 +888,7 @@ impl UI {
             Line::from(vec![
                 Span::raw("License: "),
                 Span::styled(
-                    "MIT License",
+                    make_hyperlink("https://opensource.org/licenses/MIT", "MIT License"),
                     Style::default()
                         .fg(app.theme.help_link_fg)
                         .add_modifier(Modifier::UNDERLINED),
@@ -898,7 +898,10 @@ impl UI {
             Line::from(vec![
                 Span::raw("Project: "),
                 Span::styled(
-                    "github.com/jesse-slaton/cli-tools",
+                    make_hyperlink(
+                        "https://github.com/jesse-slaton/cli-tools",
+                        "github.com/jesse-slaton/cli-tools",
+                    ),
                     Style::default()
                         .fg(app.theme.help_link_fg)
                         .add_modifier(Modifier::UNDERLINED),
@@ -1793,4 +1796,10 @@ impl UI {
         // Render the menu
         f.render_widget(menu_list, area);
     }
+}
+
+/// Create a clickable hyperlink using OSC 8 escape sequences
+/// Supported by modern terminals like Windows Terminal, iTerm2, etc.
+fn make_hyperlink(url: &str, text: &str) -> String {
+    format!("\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\", url, text)
 }
