@@ -65,17 +65,36 @@ When loading the official Dracula MC theme (`dracula256.ini`), Path Commander wi
 
 ## 🔧 How to Use MC Themes
 
-### Method 1: Download and Use
+### Method 1: Use Existing MC Skins (Zero-Copy)
+
+**NEW**: Path Commander automatically loads themes from your Midnight Commander installation!
+
+If you have MC installed, Path Commander will find skins in:
+- **Windows**: `%LOCALAPPDATA%\Midnight Commander\skins\`
+
+Just press 't' in Path Commander and your MC skins will appear in the theme selector.
+
+**Search Order** (Path Commander themes take precedence):
+1. Built-in themes (default)
+2. `~/.pc/themes/` (Path Commander-specific themes)
+3. MC skins directory (shared with Midnight Commander)
+
+If you have a theme with the same name in both locations, the `~/.pc/themes/` version will be used.
+
+### Method 2: Download and Use
 ```bash
-# Download any MC theme
+# Download any MC theme to Path Commander directory
 curl https://example.com/theme.ini -o ~/.pc/themes/mytheme.ini
+
+# Or to MC directory (shared with Midnight Commander)
+curl https://example.com/theme.ini -o "%LOCALAPPDATA%/Midnight Commander/skins/mytheme.ini"
 
 # Load it in Path Commander
 pc --theme mytheme
 # or press 't' in the app and select it
 ```
 
-### Method 2: Convert MC Theme to PC-Enhanced
+### Method 3: Convert MC Theme to PC-Enhanced
 
 Take an existing MC theme and add PC-specific sections:
 

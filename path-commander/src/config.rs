@@ -43,6 +43,27 @@ pub fn get_backups_dir() -> Result<PathBuf> {
     Ok(config_dir.join("backups"))
 }
 
+/// Get the GNU Midnight Commander skins directory path (Windows)
+///
+/// Returns the MC skins directory if it exists, or None if MC is not installed
+/// or the directory doesn't exist.
+///
+/// On Windows: `C:/Users/<user>/AppData/Local/Midnight Commander/skins/`
+pub fn get_mc_skins_dir() -> Option<PathBuf> {
+    // On Windows, MC stores skins in %LOCALAPPDATA%\Midnight Commander\skins\
+    let appdata = std::env::var("LOCALAPPDATA").ok()?;
+    let mc_skins = PathBuf::from(appdata)
+        .join("Midnight Commander")
+        .join("skins");
+
+    // Only return if the directory actually exists
+    if mc_skins.exists() && mc_skins.is_dir() {
+        Some(mc_skins)
+    } else {
+        None
+    }
+}
+
 /// Ensure the configuration directory structure exists
 ///
 /// Creates:
@@ -134,9 +155,13 @@ pub fn migrate_backups() -> Result<()> {
     Ok(())
 }
 
-/// List all available themes (built-in + custom)
+/// List all available themes (built-in + custom + MC skins)
 ///
-/// Returns a list of theme names with a boolean indicating if they're built-in
+/// Returns a list of theme names with a boolean indicating if they're built-in.
+/// Search order:
+/// 1. Built-in themes (default)
+/// 2. Path Commander themes (~/.pc/themes/) - take precedence over MC skins
+/// 3. Midnight Commander skins (%LOCALAPPDATA%/Midnight Commander/skins/)
 pub fn list_available_themes() -> Result<Vec<(String, bool)>> {
     let mut themes = vec![("default".to_string(), true)];
 
@@ -161,14 +186,36 @@ pub fn list_available_themes() -> Result<Vec<(String, bool)>> {
         }
     }
 
+    // Add themes from MC skins directory (if it exists)
+    if let Some(mc_skins_dir) = get_mc_skins_dir() {
+        if let Ok(entries) = std::fs::read_dir(&mc_skins_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("ini") {
+                    if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
+                        let name = name.to_string();
+                        // Don't add if already exists (PC themes take precedence)
+                        if !themes.iter().any(|(n, _)| n == &name) {
+                            themes.push((name, false));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     Ok(themes)
 }
 
 /// Get the path to a theme INI file
 ///
-/// Returns the path if it exists, or None if the theme doesn't exist
+/// Returns the path if it exists, or None if the theme doesn't exist.
+/// Search order (Path Commander themes take precedence):
+/// 1. Path Commander themes (~/.pc/themes/)
+/// 2. Embedded themes (themes/ directory)
+/// 3. Midnight Commander skins (%LOCALAPPDATA%/Midnight Commander/skins/)
 pub fn get_theme_path(theme_name: &str) -> Option<PathBuf> {
-    // Check custom themes first
+    // Check custom themes first (highest precedence)
     if let Ok(themes_dir) = get_themes_dir() {
         let custom_path = themes_dir.join(format!("{}.ini", theme_name));
         if custom_path.exists() {
@@ -180,6 +227,14 @@ pub fn get_theme_path(theme_name: &str) -> Option<PathBuf> {
     let embedded_path = PathBuf::from("themes").join(format!("{}.ini", theme_name));
     if embedded_path.exists() {
         return Some(embedded_path);
+    }
+
+    // Check MC skins directory (lowest precedence)
+    if let Some(mc_skins_dir) = get_mc_skins_dir() {
+        let mc_path = mc_skins_dir.join(format!("{}.ini", theme_name));
+        if mc_path.exists() {
+            return Some(mc_path);
+        }
     }
 
     None
