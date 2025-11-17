@@ -2,6 +2,7 @@ mod app;
 mod backup;
 mod config;
 mod elevation;
+mod menu;
 mod path_analyzer;
 mod permissions;
 mod process_detector;

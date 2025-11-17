@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::app::{App, ConfirmAction, InputMode, Mode, Panel};
+use crate::menu;
 use crate::path_analyzer::PathStatus;
 use crate::theme::Theme;
 
@@ -25,6 +26,13 @@ impl UI {
             Mode::ProcessRestartInfo => self.render_process_restart_info(f, app),
             Mode::FilterMenu => self.render_filter_menu(f, app),
             Mode::ThemeSelection => self.render_theme_selection(f, app),
+            Mode::Menu {
+                active_menu,
+                selected_item,
+            } => {
+                self.render_main(f, app);
+                self.render_menu_dropdown(f, app, active_menu, selected_item);
+            }
             _ => self.render_main(f, app),
         }
     }
@@ -41,6 +49,7 @@ impl UI {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
+                Constraint::Length(1), // Menu bar
                 Constraint::Length(3), // Header
                 Constraint::Min(0),    // Main content
                 Constraint::Length(3), // Status bar
@@ -48,24 +57,27 @@ impl UI {
             ])
             .split(f.area());
 
+        // Render menu bar
+        self.render_menu_bar(f, chunks[0], app);
+
         // Render header
-        self.render_header(f, chunks[0], app);
+        self.render_header(f, chunks[1], app);
 
         // Split main area into two panels
         let panels = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(chunks[1]);
+            .split(chunks[2]);
 
         // Render panels
         self.render_panel(f, panels[0], app, Panel::Machine);
         self.render_panel(f, panels[1], app, Panel::User);
 
         // Render status bar
-        self.render_status(f, chunks[2], app);
+        self.render_status(f, chunks[3], app);
 
         // Render key hints
-        self.render_key_hints(f, chunks[3], app);
+        self.render_key_hints(f, chunks[4], app);
 
         // Render input overlay if in input mode
         if let Mode::Input(input_mode) = app.mode {
@@ -1505,4 +1517,204 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(popup_layout[1])[1]
+}
+
+impl UI {
+    /// Render the menu bar (top row with menu names)
+    fn render_menu_bar(&self, f: &mut Frame, area: Rect, app: &App) {
+        let menus = menu::get_menus();
+        let mut spans = Vec::new();
+
+        for (i, menu_item) in menus.iter().enumerate() {
+            // Determine if this menu is active (only in Menu mode)
+            let is_active = if let Mode::Menu { active_menu, .. } = app.mode {
+                active_menu == i
+            } else {
+                false
+            };
+
+            // Style based on whether menu is active
+            let style = if is_active {
+                Style::default()
+                    .fg(app.theme.button_focused_fg)
+                    .bg(app.theme.button_focused_bg)
+            } else {
+                Style::default()
+                    .fg(app.theme.header_fg)
+                    .bg(app.theme.header_bg)
+            };
+
+            // Add space before menu name
+            if i > 0 {
+                spans.push(Span::styled("  ", style));
+            } else {
+                spans.push(Span::styled(" ", style));
+            }
+
+            // Add menu name with highlighted accelerator key
+            let name = &menu_item.name;
+            let accel_char = menu_item.accelerator.to_uppercase().to_string();
+
+            if let Some(pos) = name.to_uppercase().find(&accel_char) {
+                // Add text before accelerator
+                if pos > 0 {
+                    spans.push(Span::styled(&name[..pos], style));
+                }
+                // Add highlighted accelerator
+                spans.push(Span::styled(
+                    &name[pos..pos + 1],
+                    style.add_modifier(Modifier::UNDERLINED),
+                ));
+                // Add text after accelerator
+                if pos + 1 < name.len() {
+                    spans.push(Span::styled(&name[pos + 1..], style));
+                }
+            } else {
+                spans.push(Span::styled(name, style));
+            }
+
+            spans.push(Span::styled(" ", style));
+        }
+
+        // Fill the rest of the line with background color
+        let menu_line = Line::from(spans);
+        let menu_bar = Paragraph::new(menu_line).style(
+            Style::default()
+                .fg(app.theme.header_fg)
+                .bg(app.theme.header_bg),
+        );
+        f.render_widget(menu_bar, area);
+    }
+
+    /// Render the drop-down menu overlay
+    fn render_menu_dropdown(
+        &self,
+        f: &mut Frame,
+        app: &App,
+        active_menu: usize,
+        selected_item: usize,
+    ) {
+        let mut menus = menu::get_menus();
+
+        // Update enabled states based on app state
+        let has_marked = app.has_marked_items();
+        let has_marked_dead = app.has_marked_dead_paths();
+        let has_selection = match app.active_panel {
+            Panel::Machine => !app.machine_paths.is_empty(),
+            Panel::User => !app.user_paths.is_empty(),
+        };
+        let is_remote = app.connection_mode == crate::app::ConnectionMode::Remote;
+
+        menu::update_menu_enabled_states(
+            &mut menus,
+            app.is_admin,
+            has_marked,
+            has_marked_dead,
+            has_selection,
+            is_remote,
+            app.has_changes,
+        );
+
+        if active_menu >= menus.len() {
+            return;
+        }
+
+        let menu = &menus[active_menu];
+
+        // Calculate menu position (under the menu name in menu bar)
+        let mut x_offset = 1; // Start with 1 for initial space
+        for menu_item in menus.iter().take(active_menu) {
+            x_offset += menu_item.name.len() as u16 + 2; // name + 2 spaces
+        }
+
+        // Calculate menu width (longest item + padding)
+        let mut menu_width = menu.name.len();
+        for item in &menu.items {
+            let item_text_len =
+                item.label.len() + item.shortcut.as_ref().map(|s| s.len() + 2).unwrap_or(0);
+            menu_width = menu_width.max(item_text_len);
+        }
+        menu_width += 4; // Add padding
+
+        let menu_height = menu.items.len() as u16 + 2; // +2 for borders
+
+        // Create menu area (positioned below menu bar)
+        let area = Rect {
+            x: x_offset,
+            y: 1, // Below menu bar
+            width: menu_width as u16,
+            height: menu_height,
+        };
+
+        // Ensure menu fits on screen
+        let terminal_width = f.area().width;
+        let area = if area.x + area.width > terminal_width {
+            Rect {
+                x: terminal_width.saturating_sub(area.width),
+                ..area
+            }
+        } else {
+            area
+        };
+
+        // Build menu items
+        let items: Vec<ListItem> = menu
+            .items
+            .iter()
+            .enumerate()
+            .map(|(i, item)| {
+                let is_selected = i == selected_item;
+                let is_enabled = item.enabled;
+
+                let fg = if !is_enabled {
+                    app.theme.button_disabled_fg
+                } else if is_selected {
+                    app.theme.panel_selected_fg
+                } else {
+                    app.theme.dialog_fg
+                };
+
+                let bg = if is_selected {
+                    app.theme.panel_selected_bg
+                } else {
+                    app.theme.dialog_bg
+                };
+
+                // Format: "Label          Shortcut"
+                let label = &item.label;
+                let shortcut = item.shortcut.as_deref().unwrap_or("");
+                let spacing =
+                    " ".repeat(menu_width.saturating_sub(label.len() + shortcut.len() + 4));
+                let text = format!(" {}{} {} ", label, spacing, shortcut);
+
+                ListItem::new(text).style(Style::default().fg(fg).bg(bg))
+            })
+            .collect();
+
+        let menu_list = List::new(items).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(
+                    Style::default()
+                        .fg(app.theme.dialog_border_fg)
+                        .bg(app.theme.dialog_bg),
+                )
+                .style(
+                    Style::default()
+                        .fg(app.theme.dialog_fg)
+                        .bg(app.theme.dialog_bg),
+                ),
+        );
+
+        // Clear background behind menu (draw a filled rectangle)
+        let clear_block = Block::default().style(
+            Style::default()
+                .fg(app.theme.dialog_fg)
+                .bg(app.theme.dialog_bg),
+        );
+        f.render_widget(clear_block, area);
+
+        // Render the menu
+        f.render_widget(menu_list, area);
+    }
 }

@@ -53,6 +53,10 @@ pub enum Mode {
     FilterMenu,
     ThemeSelection,
     FileBrowser,
+    Menu {
+        active_menu: usize,
+        selected_item: usize,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -389,6 +393,10 @@ impl App {
             Mode::FileBrowser => self.handle_file_browser_input(key),
             Mode::FilterMenu => self.handle_filter_menu_input(key),
             Mode::ThemeSelection => self.handle_theme_selection_input(key),
+            Mode::Menu {
+                active_menu,
+                selected_item,
+            } => self.handle_menu_input(key, active_menu, selected_item),
         }
     }
 
@@ -547,6 +555,11 @@ impl App {
                 } else {
                     self.set_status("Already running as administrator");
                 }
+            }
+
+            // Menu activation with Alt+letter
+            (KeyCode::Char(c), KeyModifiers::ALT) => {
+                self.activate_menu_by_char(c);
             }
 
             _ => {}
@@ -875,9 +888,12 @@ impl App {
                         self.handle_confirm_dialog_click(mouse.column, mouse.row, terminal_size)?;
                     }
                     Mode::Normal => {
+                        // Check if click is on menu bar (top row)
+                        if mouse.row == 0 {
+                            self.handle_menu_bar_click(mouse.column)?;
+                        }
                         // Check if click is on key hints area (bottom 2 rows)
-                        let hints_start = terminal_size.height.saturating_sub(2);
-                        if mouse.row >= hints_start {
+                        else if mouse.row >= terminal_size.height.saturating_sub(2) {
                             self.handle_hints_click(mouse.column, terminal_size.width)?;
                         } else {
                             self.handle_mouse_click(
@@ -887,6 +903,17 @@ impl App {
                                 mouse.modifiers,
                             )?;
                         }
+                    }
+                    Mode::Menu {
+                        active_menu,
+                        selected_item,
+                    } => {
+                        self.handle_menu_click(
+                            mouse.column,
+                            mouse.row,
+                            active_menu,
+                            selected_item,
+                        )?;
                     }
                     _ => {}
                 }
@@ -1303,11 +1330,11 @@ impl App {
         }
     }
 
-    fn has_marked_items(&self) -> bool {
+    pub fn has_marked_items(&self) -> bool {
         !self.machine_marked.is_empty() || !self.user_marked.is_empty()
     }
 
-    fn has_marked_dead_paths(&self) -> bool {
+    pub fn has_marked_dead_paths(&self) -> bool {
         // Check if any marked items in the active panel are dead paths
         match self.active_panel {
             Panel::Machine => self
@@ -2788,6 +2815,276 @@ impl App {
     /// Clear the redo stack - called whenever a new operation is performed
     fn clear_redo_stack(&mut self) {
         self.redo_stack.clear();
+    }
+
+    /// Activate menu by accelerator character
+    fn activate_menu_by_char(&mut self, c: char) {
+        let menus = crate::menu::get_menus();
+        let c_lower = c.to_lowercase().next().unwrap_or(c);
+
+        for (i, menu) in menus.iter().enumerate() {
+            if menu.accelerator == c_lower {
+                self.mode = Mode::Menu {
+                    active_menu: i,
+                    selected_item: 0,
+                };
+                return;
+            }
+        }
+    }
+
+    /// Handle click on menu bar
+    fn handle_menu_bar_click(&mut self, column: u16) -> Result<()> {
+        let menus = crate::menu::get_menus();
+        let mut x_offset = 1; // Start with 1 for initial space
+
+        for (i, menu) in menus.iter().enumerate() {
+            let menu_start = x_offset;
+            let menu_end = x_offset + menu.name.len() as u16 + 2; // +2 for spaces around menu name
+
+            if column >= menu_start && column < menu_end {
+                // Clicked on this menu
+                self.mode = Mode::Menu {
+                    active_menu: i,
+                    selected_item: 0,
+                };
+                return Ok(());
+            }
+
+            x_offset = menu_end;
+        }
+
+        Ok(())
+    }
+
+    /// Handle click in menu dropdown
+    fn handle_menu_click(
+        &mut self,
+        column: u16,
+        row: u16,
+        active_menu: usize,
+        _selected_item: usize,
+    ) -> Result<()> {
+        let menus = crate::menu::get_menus();
+
+        if active_menu >= menus.len() {
+            return Ok(());
+        }
+
+        let menu = &menus[active_menu];
+
+        // Calculate menu position
+        let mut x_offset = 1;
+        for menu in menus.iter().take(active_menu) {
+            x_offset += menu.name.len() as u16 + 2;
+        }
+
+        // Calculate menu width
+        let mut menu_width = menu.name.len();
+        for item in &menu.items {
+            let item_text_len =
+                item.label.len() + item.shortcut.as_ref().map(|s| s.len() + 2).unwrap_or(0);
+            menu_width = menu_width.max(item_text_len);
+        }
+        menu_width += 4;
+
+        let menu_x = x_offset;
+        let menu_y = 1; // Below menu bar
+        let menu_height = menu.items.len() as u16 + 2; // +2 for borders
+
+        // Check if click is within menu bounds
+        if column >= menu_x
+            && column < menu_x + menu_width as u16
+            && row >= menu_y
+            && row < menu_y + menu_height
+        {
+            // Calculate which item was clicked (accounting for border)
+            let clicked_item = (row - menu_y - 1) as usize; // -1 for top border
+
+            if clicked_item < menu.items.len() {
+                let item = &menu.items[clicked_item];
+                if item.enabled {
+                    self.execute_menu_action(item.action)?;
+                }
+            }
+        } else {
+            // Clicked outside menu, close it
+            self.mode = Mode::Normal;
+        }
+
+        Ok(())
+    }
+
+    /// Handle keyboard input in menu mode
+    fn handle_menu_input(
+        &mut self,
+        key: KeyEvent,
+        active_menu: usize,
+        selected_item: usize,
+    ) -> Result<()> {
+        let menus = crate::menu::get_menus();
+
+        match key.code {
+            KeyCode::Esc => {
+                // Close menu and return to normal mode
+                self.mode = Mode::Normal;
+            }
+            KeyCode::Left => {
+                // Move to previous menu
+                if active_menu > 0 {
+                    self.mode = Mode::Menu {
+                        active_menu: active_menu - 1,
+                        selected_item: 0,
+                    };
+                }
+            }
+            KeyCode::Right => {
+                // Move to next menu
+                if active_menu + 1 < menus.len() {
+                    self.mode = Mode::Menu {
+                        active_menu: active_menu + 1,
+                        selected_item: 0,
+                    };
+                }
+            }
+            KeyCode::Up => {
+                // Move to previous item in menu
+                if selected_item > 0 {
+                    self.mode = Mode::Menu {
+                        active_menu,
+                        selected_item: selected_item - 1,
+                    };
+                }
+            }
+            KeyCode::Down => {
+                // Move to next item in menu
+                if active_menu < menus.len() && selected_item + 1 < menus[active_menu].items.len() {
+                    self.mode = Mode::Menu {
+                        active_menu,
+                        selected_item: selected_item + 1,
+                    };
+                }
+            }
+            KeyCode::Enter => {
+                // Execute selected menu action
+                if active_menu < menus.len() {
+                    let menu = &menus[active_menu];
+                    if selected_item < menu.items.len() {
+                        let item = &menu.items[selected_item];
+                        if item.enabled {
+                            self.execute_menu_action(item.action)?;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Execute a menu action
+    fn execute_menu_action(&mut self, action: crate::menu::MenuAction) -> Result<()> {
+        use crate::menu::MenuAction;
+
+        // Close the menu first
+        self.mode = Mode::Normal;
+
+        match action {
+            // File menu
+            MenuAction::RunAsAdministrator => {
+                if !self.is_admin {
+                    self.mode = Mode::Confirm(ConfirmAction::RequestElevation);
+                } else {
+                    self.set_status("Already running as administrator");
+                }
+            }
+            MenuAction::Exit => {
+                self.confirm_exit();
+            }
+
+            // Command menu
+            MenuAction::AddPath => {
+                self.start_add_path();
+            }
+            MenuAction::EditPath => {
+                let has_paths = match self.active_panel {
+                    Panel::Machine => !self.machine_paths.is_empty(),
+                    Panel::User => !self.user_paths.is_empty(),
+                };
+                if has_paths {
+                    self.start_edit_path();
+                }
+            }
+            MenuAction::DeleteMarked => {
+                if self.has_marked_items() {
+                    self.mode = Mode::Confirm(ConfirmAction::DeleteSelected);
+                }
+            }
+            MenuAction::MarkItem => {
+                self.toggle_mark();
+            }
+            MenuAction::UnmarkAll => {
+                self.unmark_all();
+            }
+            MenuAction::MoveMarked => {
+                self.move_marked_to_other_panel()?;
+            }
+            MenuAction::MoveItemUp => {
+                self.move_item_up();
+            }
+            MenuAction::NormalizeSelected => {
+                self.normalize_selected();
+            }
+            MenuAction::DeleteAllDead => {
+                self.mode = Mode::Confirm(ConfirmAction::DeleteAllDead);
+            }
+            MenuAction::DeleteAllDuplicates => {
+                self.mode = Mode::Confirm(ConfirmAction::DeleteAllDuplicates);
+            }
+            MenuAction::CreateMarkedDirectories => {
+                if self.has_marked_dead_paths() {
+                    self.mode = Mode::Confirm(ConfirmAction::CreateMarkedDirectories);
+                } else {
+                    self.set_status("No marked dead paths to create");
+                }
+            }
+
+            // Options menu
+            MenuAction::SelectTheme => {
+                self.open_theme_selector()?;
+            }
+            MenuAction::ApplyFilter => {
+                self.mode = Mode::FilterMenu;
+                self.filter_menu_selected = 0;
+            }
+            MenuAction::ConnectRemote => {
+                if self.connection_mode == ConnectionMode::Local {
+                    self.mode = Mode::Input(InputMode::ConnectRemote);
+                    self.input_buffer.clear();
+                }
+            }
+            MenuAction::DisconnectRemote => {
+                if self.connection_mode == ConnectionMode::Remote {
+                    self.mode = Mode::Confirm(ConfirmAction::DisconnectRemote);
+                }
+            }
+            MenuAction::CreateBackup => {
+                self.create_backup()?;
+            }
+            MenuAction::RestoreBackup => {
+                self.show_backup_list()?;
+            }
+
+            // Help menu
+            MenuAction::KeyboardShortcuts => {
+                self.mode = Mode::Help;
+            }
+            MenuAction::About => {
+                self.set_status("Path Commander - Windows PATH environment variable manager");
+            }
+        }
+
+        Ok(())
     }
 }
 
