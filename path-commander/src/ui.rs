@@ -878,7 +878,7 @@ impl UI {
                         .fg(app.theme.dialog_title_fg)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::raw("  v0.1.0"),
+                Span::raw("  v0.2.0"),
             ]),
             Line::from(""),
             Line::from("Windows PATH Environment Manager"),
