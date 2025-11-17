@@ -479,7 +479,7 @@ impl UI {
                     if !app.is_admin {
                         key_pairs.push(("Ctrl+E", "Elevate"));
                     }
-                    key_pairs.push(("Q", "Quit"));
+                    key_pairs.push(("10", "Quit"));
                     self.render_evenly_spaced_keys(key_pairs, area, &app.theme)
                 } else if total_marked > 0 {
                     // When items are marked - show bulk operations
@@ -500,7 +500,7 @@ impl UI {
                     if !app.is_admin {
                         key_pairs.push(("Ctrl+E", "Elevate"));
                     }
-                    key_pairs.push(("Q", "Quit"));
+                    key_pairs.push(("10", "Quit"));
                     self.render_evenly_spaced_keys(key_pairs, area, &app.theme)
                 } else {
                     // Normal mode - default hints with more discoverable features
@@ -526,7 +526,7 @@ impl UI {
                     if app.remote_connection.is_some() {
                         key_pairs.push(("Ctrl+O", "Disconnect"));
                     }
-                    key_pairs.push(("Q", "Quit"));
+                    key_pairs.push(("10", "Quit"));
 
                     self.render_evenly_spaced_keys(key_pairs, area, &app.theme)
                 }

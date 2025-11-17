@@ -188,21 +188,9 @@ fn run_app<B: ratatui::backend::Backend>(
                     // Global shortcuts
                     match (key.code, key.modifiers) {
                         (KeyCode::Char('c'), KeyModifiers::CONTROL) => break,
-                        (KeyCode::Char('q'), KeyModifiers::NONE) => {
-                            // Only handle 'q' in Normal mode, otherwise let app handle it
-                            if matches!(app.mode, app::Mode::Normal) {
-                                app.confirm_exit();
-                            } else {
-                                app.handle_input(key)?;
-                            }
-                        }
                         (KeyCode::F(10), _) => {
-                            // Only handle F10 as quit in Normal mode
-                            if matches!(app.mode, app::Mode::Normal) {
-                                app.confirm_exit();
-                            } else {
-                                app.handle_input(key)?;
-                            }
+                            // F10 always triggers exit confirmation
+                            app.confirm_exit();
                         }
                         _ => {
                             // Handle input in app
