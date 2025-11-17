@@ -67,7 +67,7 @@ impl Menu {
 }
 
 /// Get all menus for the application
-pub fn get_menus() -> Vec<Menu> {
+pub fn get_menus(connection_mode: crate::app::ConnectionMode) -> Vec<Menu> {
     let mut menus = Vec::new();
 
     // File menu
@@ -87,11 +87,14 @@ pub fn get_menus() -> Vec<Menu> {
     command_menu.add_item("Delete Marked", Some("F3/Del"), MenuAction::DeleteMarked);
     command_menu.add_item("Mark/Unmark", Some("F2/Space"), MenuAction::MarkItem);
     command_menu.add_item("Unmark All", Some("Ctrl+Shift+U"), MenuAction::UnmarkAll);
-    command_menu.add_item(
-        "Move Marked to Other Panel",
-        Some("F5"),
-        MenuAction::MoveMarked,
-    );
+
+    // Dynamic label based on connection mode
+    let f5_label = if connection_mode == crate::app::ConnectionMode::Remote {
+        "Copy Marked to Other Computer"
+    } else {
+        "Move Marked to Other Panel"
+    };
+    command_menu.add_item(f5_label, Some("F5"), MenuAction::MoveMarked);
     command_menu.add_item("Move Item Up", Some("F6"), MenuAction::MoveItemUp);
     command_menu.add_item(
         "Normalize Selected",

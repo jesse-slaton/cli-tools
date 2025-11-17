@@ -134,6 +134,13 @@ pub enum Operation {
         to_panel: Panel,
         paths_with_indices: Vec<(usize, String)>, // Original indices in from_panel
     },
+    /// Copy paths from one panel to another (used in remote mode)
+    CopyPaths {
+        #[allow(dead_code)]
+        from_panel: Panel,
+        to_panel: Panel,
+        paths_with_indices: Vec<(usize, String)>, // Paths that were copied to to_panel
+    },
     /// Normalize paths - stores changes made
     NormalizePaths {
         panel: Panel,
@@ -1607,6 +1614,9 @@ impl App {
         let from_panel = self.active_panel;
         let to_panel = from_panel.toggle();
 
+        // In remote mode, copy instead of move (don't delete from source)
+        let is_copy_mode = self.connection_mode == ConnectionMode::Remote;
+
         let (from_paths, to_paths, from_marked) = match from_panel {
             Panel::Machine => (
                 &mut self.machine_paths,
@@ -1644,14 +1654,17 @@ impl App {
             }
         }
 
-        // Remove from source (in reverse order)
-        let mut new_from = Vec::new();
-        for (idx, path) in from_paths.iter().enumerate() {
-            if !from_marked.contains(&idx) {
-                new_from.push(path.clone());
+        // In copy mode (remote), don't remove from source
+        if !is_copy_mode {
+            // Remove from source (in reverse order)
+            let mut new_from = Vec::new();
+            for (idx, path) in from_paths.iter().enumerate() {
+                if !from_marked.contains(&idx) {
+                    new_from.push(path.clone());
+                }
             }
+            *from_paths = new_from;
         }
-        *from_paths = new_from;
 
         // Add to destination
         to_paths.extend(moved.iter().cloned());
@@ -1662,20 +1675,39 @@ impl App {
         // Clear redo stack and record undo operation
         if !paths_with_indices.is_empty() {
             self.clear_redo_stack();
-            self.undo_stack.push(Operation::MovePaths {
-                from_panel,
-                to_panel,
-                paths_with_indices,
-            });
+            if is_copy_mode {
+                self.undo_stack.push(Operation::CopyPaths {
+                    from_panel,
+                    to_panel,
+                    paths_with_indices,
+                });
+            } else {
+                self.undo_stack.push(Operation::MovePaths {
+                    from_panel,
+                    to_panel,
+                    paths_with_indices,
+                });
+            }
         }
 
         self.reanalyze();
         self.has_changes = true;
-        self.set_status(&format!(
-            "Moved {} path(s) to {}",
-            count,
-            to_panel.scope().as_str()
-        ));
+
+        let action_verb = if is_copy_mode { "Copied" } else { "Moved" };
+        let target = if self.connection_mode == ConnectionMode::Remote {
+            if to_panel == Panel::User {
+                self.remote_connection
+                    .as_ref()
+                    .map(|c| format!("remote ({})", c.computer_name()))
+                    .unwrap_or_else(|| "remote".to_string())
+            } else {
+                "local".to_string()
+            }
+        } else {
+            to_panel.scope().as_str().to_string()
+        };
+
+        self.set_status(&format!("{} {} path(s) to {}", action_verb, count, target));
         Ok(())
     }
 
@@ -2664,6 +2696,25 @@ impl App {
                     }
                 }
 
+                Operation::CopyPaths {
+                    from_panel: _,
+                    to_panel,
+                    paths_with_indices,
+                } => {
+                    // Undo copy: remove the copied paths from to_panel
+                    // Note: paths_with_indices contains the indices from the FROM panel,
+                    // but we need to remove from the TO panel where they were appended
+                    let to_paths = match to_panel {
+                        Panel::Machine => &mut self.machine_paths,
+                        Panel::User => &mut self.user_paths,
+                    };
+
+                    // Paths were appended to the end, so remove the last N paths
+                    let count = paths_with_indices.len();
+                    let new_len = to_paths.len().saturating_sub(count);
+                    to_paths.truncate(new_len);
+                }
+
                 Operation::NormalizePaths { panel, changes } => {
                     // Restore old (non-normalized) values
                     let paths = match panel {
@@ -2794,6 +2845,22 @@ impl App {
                     }
                 }
 
+                Operation::CopyPaths {
+                    from_panel: _,
+                    to_panel,
+                    paths_with_indices,
+                } => {
+                    // Redo copy: add the copied paths back to to_panel
+                    let to_paths = match to_panel {
+                        Panel::Machine => &mut self.machine_paths,
+                        Panel::User => &mut self.user_paths,
+                    };
+
+                    for (_, path) in paths_with_indices {
+                        to_paths.push(path);
+                    }
+                }
+
                 Operation::NormalizePaths { panel, changes } => {
                     // Re-apply normalizations
                     let paths = match panel {
@@ -2831,7 +2898,7 @@ impl App {
 
     /// Activate menu by accelerator character
     fn activate_menu_by_char(&mut self, c: char) {
-        let menus = crate::menu::get_menus();
+        let menus = crate::menu::get_menus(self.connection_mode);
         let c_lower = c.to_lowercase().next().unwrap_or(c);
 
         for (i, menu) in menus.iter().enumerate() {
@@ -2847,7 +2914,7 @@ impl App {
 
     /// Handle click on menu bar
     fn handle_menu_bar_click(&mut self, column: u16) -> Result<()> {
-        let menus = crate::menu::get_menus();
+        let menus = crate::menu::get_menus(self.connection_mode);
         let mut x_offset = 1; // Start with 1 for initial space
 
         for (i, menu) in menus.iter().enumerate() {
@@ -2877,7 +2944,7 @@ impl App {
         active_menu: usize,
         _selected_item: usize,
     ) -> Result<()> {
-        let menus = crate::menu::get_menus();
+        let menus = crate::menu::get_menus(self.connection_mode);
 
         if active_menu >= menus.len() {
             return Ok(());
@@ -2934,7 +3001,7 @@ impl App {
         active_menu: usize,
         selected_item: usize,
     ) -> Result<()> {
-        let menus = crate::menu::get_menus();
+        let menus = crate::menu::get_menus(self.connection_mode);
 
         match key.code {
             KeyCode::Esc => {

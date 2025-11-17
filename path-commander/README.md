@@ -5,10 +5,12 @@ A powerful Terminal User Interface (TUI) for managing Windows PATH environment v
 ## Features
 
 - **Dual-Panel Interface**: View and manage MACHINE (system) and USER paths side-by-side
+- **Remote Computer Management**: Connect to and manage PATH variables on remote Windows computers across your network
 - **Intelligent Analysis**:
   - Detects duplicate entries (case-insensitive, normalized comparison)
   - Identifies "dead" paths that don't exist on the filesystem
   - Highlights non-normalized paths (short names, environment variables)
+  - Cross-computer duplicate detection when in remote mode
 - **Color-Coded Display**:
   - 🟢 Green: Valid, unique, normalized paths
   - 🔴 Red: Dead paths (don't exist)
@@ -21,6 +23,7 @@ A powerful Terminal User Interface (TUI) for managing Windows PATH environment v
   - Remove all dead paths with one command
   - Normalize paths (expand short names and environment variables)
   - Move paths between USER and MACHINE scopes
+  - Copy paths between local and remote computers
   - Reorder paths
 - **Safety Features**:
   - Staged changes (review before applying)
@@ -73,7 +76,79 @@ pc
 # Run as administrator (can edit both USER and MACHINE paths)
 # Right-click Command Prompt/PowerShell and "Run as Administrator"
 pc
+
+# Connect to remote computer on startup
+pc --remote COMPUTERNAME
+pc --remote 192.168.1.100
 ```
+
+### Remote Computer Management
+
+Path Commander can manage PATH variables on remote Windows computers across your network.
+
+#### Connecting to Remote Computers
+
+**Command Line:**
+```bash
+pc --remote COMPUTERNAME
+pc --remote 192.168.1.100
+```
+
+**Interactive Connection:**
+- Press `Ctrl+O` to open the connection dialog
+- Enter the computer name or IP address
+- Press `Enter` to connect
+
+**Disconnecting:**
+- Press `Ctrl+O` again while connected
+- Confirm disconnection
+
+#### Requirements for Remote Management
+
+1. **Administrator Privileges**: You must run Path Commander as administrator
+2. **Remote Registry Service**: Must be running on the target computer
+3. **Network Access**: Target computer must be reachable
+4. **Administrative Credentials**: You need admin rights on the remote computer
+
+#### Remote Mode Interface
+
+When connected to a remote computer:
+- **Left Panel**: LOCAL MACHINE paths
+- **Right Panel**: REMOTE MACHINE (computername) paths
+- **Header**: Shows "REMOTE: computername"
+- **F5 Key**: Copies paths between computers (instead of moving)
+
+#### Supported Operations on Remote
+
+✅ View remote MACHINE paths
+✅ Add/Edit/Delete remote paths
+✅ Normalize remote paths
+✅ Remove duplicates and dead paths
+✅ Copy paths between local and remote computers
+✅ Cross-computer duplicate detection
+✅ Undo/Redo operations
+
+❌ Path existence validation (see limitations below)
+❌ Directory creation (F10)
+❌ USER paths (only MACHINE paths for security)
+
+#### Remote Mode Limitations
+
+Due to Windows limitations when accessing remote filesystems:
+
+- **Path Existence Validation**: Cannot determine if remote paths exist on the filesystem
+- **Directory Creation**: F10 (create directory) is unavailable for remote paths
+- **Dead Path Detection**: Dead/alive status cannot be determined for remote paths
+- **WM_SETTINGCHANGE**: Environment variable change notifications only work locally. Running processes on the remote computer won't see PATH changes until restarted.
+
+> **Note**: Issue [#24](https://github.com/jesse-slaton/cli-tools/issues/24) tracks implementing UNC path support to enable these features.
+
+#### Security Considerations
+
+- Only MACHINE paths are accessible on remote computers (USER paths disabled for security)
+- Uses current user credentials for authentication
+- Requires same permissions as direct remote registry access
+- All operations are logged in automatic backups
 
 ### Keyboard Shortcuts
 
@@ -90,7 +165,7 @@ pc
 - `F1`, `?` - Show help screen
 - `F3`, `Delete` - Delete marked items
 - `F4` - Add new path
-- `F5` - Move marked items to other panel (USER ↔ MACHINE)
+- `F5` - Move marked items to other panel (USER ↔ MACHINE) or copy between computers in remote mode
 - `F6` - Move current item up in order
 - `F7` - Remove all duplicate paths
 - `F8` - Remove all dead paths
@@ -101,6 +176,9 @@ pc
 - `Ctrl+S` - Apply changes to Windows Registry
 - `Ctrl+B` - Create manual backup
 - `Ctrl+R` - Restore from backup
+
+#### Remote
+- `Ctrl+O` - Connect to/disconnect from remote computer
 
 #### Other
 - `Q`, `F10`, `Esc` - Exit (with confirmation if changes exist)

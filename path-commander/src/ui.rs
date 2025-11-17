@@ -628,6 +628,12 @@ impl UI {
         ];
 
         // Right column content
+        let f5_label = if app.connection_mode == crate::app::ConnectionMode::Remote {
+            "  F5              Copy marked to other computer"
+        } else {
+            "  F5              Move marked to other panel"
+        };
+
         let right_text = vec![
             Line::from(vec![Span::styled(
                 "Actions:",
@@ -637,7 +643,7 @@ impl UI {
             )]),
             Line::from("  F3, Delete      Delete marked items"),
             Line::from("  F4              Add new path"),
-            Line::from("  F5              Move marked to other panel"),
+            Line::from(f5_label),
             Line::from("  F6              Move item up in order"),
             Line::from("  F7              Remove all duplicates"),
             Line::from("  F8              Remove all dead paths"),
@@ -687,6 +693,18 @@ impl UI {
             Line::from("  Ctrl+O          Connect to/disconnect from"),
             Line::from("                  remote computer"),
             Line::from("  --remote NAME   Connect on startup"),
+            Line::from("  F5              Copy paths between computers"),
+            Line::from(""),
+            Line::from(vec![Span::styled(
+                "Remote Limitations:",
+                Style::default()
+                    .fg(app.theme.help_bold_fg)
+                    .add_modifier(Modifier::BOLD),
+            )]),
+            Line::from("  • Path existence cannot be validated"),
+            Line::from("  • Directory creation (F10) unavailable"),
+            Line::from("  • Dead/alive status not detected"),
+            Line::from("  See Issue #24 for UNC path support"),
             Line::from(""),
             Line::from(vec![Span::styled(
                 "Color Legend:",
@@ -1580,7 +1598,7 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 impl UI {
     /// Render the menu bar (top row with menu names)
     fn render_menu_bar(&self, f: &mut Frame, area: Rect, app: &App) {
-        let menus = menu::get_menus();
+        let menus = menu::get_menus(app.connection_mode);
         let mut spans = Vec::new();
 
         for (i, menu_item) in menus.iter().enumerate() {
@@ -1652,7 +1670,7 @@ impl UI {
         active_menu: usize,
         selected_item: usize,
     ) {
-        let mut menus = menu::get_menus();
+        let mut menus = menu::get_menus(app.connection_mode);
 
         // Update enabled states based on app state
         let has_marked = app.has_marked_items();
