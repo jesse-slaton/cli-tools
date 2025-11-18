@@ -6,7 +6,9 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use crate::backup::{self, PathBackup};
-use crate::path_analyzer::{analyze_paths, analyze_paths_with_remote, normalize_path, to_unc_path, PathInfo};
+use crate::path_analyzer::{
+    analyze_paths, analyze_paths_with_remote, normalize_path, to_unc_path, PathInfo,
+};
 use crate::permissions;
 use crate::registry::{self, PathScope, RemoteConnection};
 use crate::theme::Theme;
@@ -2251,7 +2253,8 @@ impl App {
                 anyhow::anyhow!(
                     "Failed to create remote directory '{}': {}. \
                     Ensure C$ administrative shares are enabled and accessible.",
-                    actual_path, e
+                    actual_path,
+                    e
                 )
             } else {
                 anyhow::anyhow!("Failed to create directory '{}': {}", actual_path, e)
@@ -2269,13 +2272,12 @@ impl App {
 
         // Determine if we're creating on remote computer
         // In remote mode, User panel (right) is actually the remote machine
-        let remote_computer = if self.connection_mode == ConnectionMode::Remote
-            && self.active_panel == Panel::User
-        {
-            self.remote_connection.as_ref().map(|c| c.computer_name())
-        } else {
-            None
-        };
+        let remote_computer =
+            if self.connection_mode == ConnectionMode::Remote && self.active_panel == Panel::User {
+                self.remote_connection.as_ref().map(|c| c.computer_name())
+            } else {
+                None
+            };
 
         match Self::create_directory_with_remote(&self.pending_directory, remote_computer) {
             Ok(()) => {
@@ -2286,7 +2288,8 @@ impl App {
                     }
                     Panel::User => {
                         if self.connection_mode == ConnectionMode::Remote {
-                            self.remote_machine_paths.push(self.pending_directory.clone());
+                            self.remote_machine_paths
+                                .push(self.pending_directory.clone());
                         } else {
                             self.user_paths.push(self.pending_directory.clone());
                         }
@@ -2317,13 +2320,12 @@ impl App {
         let mut failed_paths = Vec::new();
 
         // Determine if we're creating on remote computer
-        let remote_computer = if self.connection_mode == ConnectionMode::Remote
-            && self.active_panel == Panel::User
-        {
-            self.remote_connection.as_ref().map(|c| c.computer_name())
-        } else {
-            None
-        };
+        let remote_computer =
+            if self.connection_mode == ConnectionMode::Remote && self.active_panel == Panel::User {
+                self.remote_connection.as_ref().map(|c| c.computer_name())
+            } else {
+                None
+            };
 
         // Collect all marked dead paths
         let marked_paths: Vec<(usize, String)> = match self.active_panel {
@@ -2448,7 +2450,8 @@ impl App {
                 self.machine_info = analyze_paths(&self.machine_paths, &self.remote_machine_paths);
 
                 // Remote paths need UNC path validation - pass the remote computer name
-                let remote_computer_name = self.remote_connection
+                let remote_computer_name = self
+                    .remote_connection
                     .as_ref()
                     .map(|conn| conn.computer_name());
                 self.remote_machine_info = analyze_paths_with_remote(

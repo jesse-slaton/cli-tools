@@ -2,6 +2,8 @@
 
 A powerful Terminal User Interface (TUI) for managing Windows PATH environment variables, inspired by Midnight Commander.
 
+> **📖 New to Path Commander?** Check out the **[User Guide](USER_GUIDE.md)** for tutorials, examples, and detailed feature explanations!
+
 ## Features
 
 - **Dual-Panel Interface**: View and manage MACHINE (system) and USER paths side-by-side
@@ -125,23 +127,19 @@ When connected to a remote computer:
 ✅ Normalize remote paths
 ✅ Remove duplicates and dead paths
 ✅ Copy paths between local and remote computers
+✅ Path existence validation via UNC paths (\\COMPUTERNAME\C$\...)
+✅ Create missing directories on remote (Shift+F10)
+✅ Accurate dead/alive path detection using UNC paths
 ✅ Cross-computer duplicate detection
 ✅ Undo/Redo operations
 
-❌ Path existence validation (see limitations below)
-❌ Directory creation (F10)
 ❌ USER paths (only MACHINE paths for security)
 
 #### Remote Mode Limitations
 
-Due to Windows limitations when accessing remote filesystems:
-
-- **Path Existence Validation**: Cannot determine if remote paths exist on the filesystem
-- **Directory Creation**: F10 (create directory) is unavailable for remote paths
-- **Dead Path Detection**: Dead/alive status cannot be determined for remote paths
 - **WM_SETTINGCHANGE**: Environment variable change notifications only work locally. Running processes on the remote computer won't see PATH changes until restarted.
-
-> **Note**: Issue [#24](https://github.com/jesse-slaton/cli-tools/issues/24) tracks implementing UNC path support to enable these features.
+- **USER Paths**: Only MACHINE paths are accessible on remote computers (security limitation)
+- **Administrative Shares**: Requires C$, D$, etc. to be enabled on remote computer (default on most Windows systems)
 
 #### Security Considerations
 
@@ -412,15 +410,31 @@ For developers:
 - See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines
 - See [TESTING.md](TESTING.md) for information about the test suite
 
+## Documentation
+
+- **[USER_GUIDE.md](USER_GUIDE.md)** - Comprehensive user guide with tutorials and examples
+- **[CHANGELOG.md](CHANGELOG.md)** - Version history and release notes
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Development setup and contribution guidelines
+- **[TESTING.md](TESTING.md)** - Information about the test suite
+- **[MC_COMPATIBILITY.md](MC_COMPATIBILITY.md)** - Midnight Commander theme compatibility
+- **[KEYBINDING_REFERENCE.md](KEYBINDING_REFERENCE.md)** - Complete keyboard shortcut reference
+
 ## Roadmap
+
+Completed features:
+- ✅ Undo/redo functionality (v0.1.0)
+- ✅ Filter paths (v0.1.0)
+- ✅ Themes/color customization (v0.1.0+)
+- ✅ Menu system (v0.2.0)
+- ✅ Live theme preview (v0.4.0)
+- ✅ Remote computer management (v0.1.0)
+- ✅ UNC path support for remote validation (v0.6.0)
 
 Potential future features:
 - Export/import PATH to various formats (CSV, JSON, plain text)
-- Undo/redo functionality
-- Search/filter paths
+- Search functionality within paths
 - Duplicate detection across similar patterns (e.g., different versions of the same tool)
 - Integration with UAC elevation from within the app
-- Themes/color customization (basic theme support already implemented)
 
 ## Acknowledgments
 
