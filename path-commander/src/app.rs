@@ -1,5 +1,7 @@
 use anyhow::{Context, Result};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{
+    KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use ratatui::{layout::Rect, widgets::ScrollbarState};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -656,53 +658,63 @@ impl App {
     }
 
     fn handle_input_mode(&mut self, key: KeyEvent, input_mode: InputMode) -> Result<()> {
-        match key.code {
-            KeyCode::Enter => {
-                // Prevent buffered ENTER keys from immediately confirming (100ms grace period)
-                let elapsed = std::time::Instant::now().duration_since(self.mode_enter_time);
-                if elapsed < std::time::Duration::from_millis(100) {
-                    return Ok(());
-                }
+        // Accept both Press (initial keypress) and Repeat (held key) events for text input
+        // This allows backspace and character input to repeat when keys are held down
+        match key.kind {
+            KeyEventKind::Press | KeyEventKind::Repeat => {
+                match key.code {
+                    KeyCode::Enter => {
+                        // Prevent buffered ENTER keys from immediately confirming (100ms grace period)
+                        let elapsed =
+                            std::time::Instant::now().duration_since(self.mode_enter_time);
+                        if elapsed < std::time::Duration::from_millis(100) {
+                            return Ok(());
+                        }
 
-                self.mode = Mode::Normal;
-                self.mode_enter_time = std::time::Instant::now();
-                match input_mode {
-                    InputMode::AddPath => self.add_path_from_input()?,
-                    InputMode::EditPath => self.update_path_from_input()?,
-                    InputMode::ConnectRemote => {
-                        let computer_name = self.input_buffer.trim().to_string();
-                        if !computer_name.is_empty() {
-                            match self.connect_to_remote(&computer_name) {
-                                Ok(()) => {
-                                    self.set_status(&format!(
-                                        "Successfully connected to {}",
-                                        computer_name
-                                    ));
-                                }
-                                Err(e) => {
-                                    self.set_status(&format!(
-                                        "Failed to connect to {}: {}",
-                                        computer_name, e
-                                    ));
+                        self.mode = Mode::Normal;
+                        self.mode_enter_time = std::time::Instant::now();
+                        match input_mode {
+                            InputMode::AddPath => self.add_path_from_input()?,
+                            InputMode::EditPath => self.update_path_from_input()?,
+                            InputMode::ConnectRemote => {
+                                let computer_name = self.input_buffer.trim().to_string();
+                                if !computer_name.is_empty() {
+                                    match self.connect_to_remote(&computer_name) {
+                                        Ok(()) => {
+                                            self.set_status(&format!(
+                                                "Successfully connected to {}",
+                                                computer_name
+                                            ));
+                                        }
+                                        Err(e) => {
+                                            self.set_status(&format!(
+                                                "Failed to connect to {}: {}",
+                                                computer_name, e
+                                            ));
+                                        }
+                                    }
                                 }
                             }
                         }
+                        self.input_buffer.clear();
                     }
+                    KeyCode::Esc => {
+                        self.mode = Mode::Normal;
+                        self.mode_enter_time = std::time::Instant::now();
+                        self.input_buffer.clear();
+                    }
+                    KeyCode::Char(c) => {
+                        self.input_buffer.push(c);
+                    }
+                    KeyCode::Backspace => {
+                        self.input_buffer.pop();
+                    }
+                    _ => {}
                 }
-                self.input_buffer.clear();
             }
-            KeyCode::Esc => {
-                self.mode = Mode::Normal;
-                self.mode_enter_time = std::time::Instant::now();
-                self.input_buffer.clear();
+            _ => {
+                // Ignore Release events
             }
-            KeyCode::Char(c) => {
-                self.input_buffer.push(c);
-            }
-            KeyCode::Backspace => {
-                self.input_buffer.pop();
-            }
-            _ => {}
         }
         Ok(())
     }

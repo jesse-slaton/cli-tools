@@ -1,6 +1,6 @@
 [package]
 name = "path-commander"
-version = "0.6.1"
+version = "0.6.2"
 edition = "2021"
 authors = ["Jesse Slaton <github@doxazo.net>"]
 description = "A TUI for managing Windows PATH environment variables"

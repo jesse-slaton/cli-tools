@@ -13,7 +13,9 @@ mod ui;
 use anyhow::Result;
 use clap::Parser;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
+    event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
+    },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -153,10 +155,6 @@ fn run_app<B: ratatui::backend::Backend>(
         }
     }
 
-    // Event deduplication state to filter duplicate events from Windows/MSYS2 buffering
-    let mut last_event_time = std::time::Instant::now();
-    let mut last_key_code: Option<KeyCode> = None;
-
     loop {
         terminal.draw(|f| ui.render(f, app))?;
 
@@ -171,20 +169,10 @@ fn run_app<B: ratatui::backend::Backend>(
 
         match event::read()? {
             Event::Key(key) => {
-                let now = std::time::Instant::now();
-                let elapsed = now.duration_since(last_event_time);
-
-                // Filter duplicate events within 200ms window (Windows/MSYS2 console buffering)
-                // Conservative threshold to catch all buffering delays while staying well below
-                // human key repeat timing (typically 250-500ms)
-                let is_duplicate = last_key_code == Some(key.code)
-                    && elapsed < std::time::Duration::from_millis(200);
-
-                if !is_duplicate {
-                    // Process the key
-                    last_key_code = Some(key.code);
-                    last_event_time = now;
-
+                // Filter duplicate events using KeyEventKind (Windows sends both Press and Release)
+                // Only process Press events to avoid double-handling the same keystroke
+                // This is the standard approach recommended by ratatui/crossterm documentation
+                if key.kind == KeyEventKind::Press {
                     // Global shortcuts
                     match (key.code, key.modifiers) {
                         (KeyCode::Char('c'), KeyModifiers::CONTROL) => break,
@@ -204,7 +192,6 @@ fn run_app<B: ratatui::backend::Backend>(
                         }
                     }
                 }
-                // Duplicate events are silently dropped
             }
             Event::Mouse(mouse) => {
                 // Handle mouse events (clicks, scrolling)

@@ -5,6 +5,26 @@ All notable changes to Path Commander will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2025-01-17
+
+### Fixed
+- **Keyboard input now properly supports key repeat for backspace and character input**
+  - Holding down backspace now continuously deletes characters (previously only deleted once)
+  - All text input fields now respond correctly to held-down keys
+
+### Changed
+- **Migrated to standard ratatui/crossterm event handling pattern**
+  - Replaced custom time-based event deduplication with `KeyEventKind` filtering
+  - Now filters events by `KeyEventKind::Press` (and `Repeat` for text input) instead of 200ms timing window
+  - Aligns with official ratatui documentation and ecosystem best practices
+  - Simplified event loop by removing manual state tracking
+
+### Technical
+- Added `KeyEventKind` to crossterm imports in `main.rs` and `app.rs`
+- Updated event loop in `main.rs` to filter by `key.kind == KeyEventKind::Press`
+- Updated `handle_input_mode()` in `app.rs` to accept both `Press` and `Repeat` events
+- Removed time-based deduplication logic (`last_event_time`, `last_key_code` tracking)
+
 ## [0.6.0] - 2025-01-17
 
 ### Added
@@ -179,6 +199,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Filter system for viewing specific path types
 - Function key display matching MC's buttonbar style
 
+[0.6.2]: https://github.com/jesse-slaton/cli-tools/releases/tag/v0.6.2
 [0.6.0]: https://github.com/jesse-slaton/cli-tools/releases/tag/v0.6.0
 [0.5.0]: https://github.com/jesse-slaton/cli-tools/releases/tag/v0.5.0
 [0.4.0]: https://github.com/jesse-slaton/cli-tools/releases/tag/v0.4.0
