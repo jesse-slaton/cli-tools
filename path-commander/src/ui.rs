@@ -734,6 +734,7 @@ impl UI {
                     .fg(app.theme.help_bold_fg)
                     .add_modifier(Modifier::BOLD),
             )]),
+            Line::from("  Ctrl+O          Connect/Disconnect"),
             Line::from("  --remote NAME   Connect on startup"),
             Line::from(""),
             Line::from("  Limitations:"),
