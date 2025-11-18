@@ -5,6 +5,54 @@ All notable changes to Path Commander will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-01-17
+
+### Added
+- **Floating dialog system** matching Midnight Commander's visual style
+  - Dialogs now render with main window visible underneath (proper z-ordering)
+  - Drop shadow effects on right and bottom edges for visual depth
+  - Bold borders for enhanced visual separation
+- **Intelligent auto-sizing for dialogs** based on content
+  - About dialog: auto-sized to fit ASCII logo (30×16)
+  - Filter Menu: auto-sized to fit 5 options with descriptions (45×11)
+  - Backup List: dynamically sizes based on number of backups (max 15 visible)
+  - Theme Selection: dynamically sizes based on longest theme name
+- **ASCII logo in About dialog** with "Path Commander" branding
+- **MC-style gray dialog backgrounds** (black text on lightgray)
+  - Matches Midnight Commander's dialog aesthetic
+  - Classic theme updated to use gray dialogs
+- **Theme color name support** for MC skin files
+  - Added support for `lightgray`, `gray`, `brown` color names
+  - MC skin files now parse correctly with named colors (not just rgb notation)
+- **Help menu item** - Added "Help" (F1) to Help menu for discoverability
+
+### Changed
+- **Simplified Help dialog** - Removed redundant shortcuts already visible in menus/function keys
+  - Kept only navigation, marking, undo/redo, privileges, remote mode, and color legend
+  - Two-column layout retained with more focused content
+- **Dialog sizes reduced** across the board for less screen obstruction
+  - Help: 90%×90% → 55%×50%
+  - Confirm: 60%×30% → 40%×20%
+  - Input: 70%×20% → 50%×15%
+  - File Browser: 85%×75% → 60%×60%
+  - Process Restart Info: 80%×80% → 55%×50%
+- **Theme Selection dialog improvements**
+  - Removed preview section (not useful)
+  - Auto-sizes based on theme name lengths
+  - Can show up to 15 themes at once (increased from 12)
+
+### Fixed
+- Help dialog now uses standard dialog colors instead of separate `help_bg`
+- All dialogs respect main window visibility (no black overlays)
+- Theme chooser no longer unnecessarily wide
+
+### Technical
+- Added `content_sized_rect()` helper for auto-sizing dialogs
+- Added `render_dialog_shadow()` helper for consistent shadow effects
+- Added `create_floating_dialog_block()` for consistent dialog styling
+- Refactored `render()` to always render main window first, then dialogs on top
+- Updated color parser to support MC's named color conventions
+
 ## [0.2.0] - 2025-01-16
 
 ### Added
@@ -80,5 +128,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Filter system for viewing specific path types
 - Function key display matching MC's buttonbar style
 
+[0.3.0]: https://github.com/jesse-slaton/cli-tools/releases/tag/v0.3.0
 [0.2.0]: https://github.com/jesse-slaton/cli-tools/releases/tag/v0.2.0
 [0.1.0]: https://github.com/jesse-slaton/cli-tools/releases/tag/v0.1.0

@@ -20,13 +20,34 @@ impl UI {
 
     pub fn render(&self, f: &mut Frame, app: &App) {
         match app.mode {
-            Mode::Help => self.render_help(f, app),
-            Mode::About => self.render_about(f, app),
-            Mode::Confirm(action) => self.render_confirm(f, app, action),
-            Mode::BackupList => self.render_backup_list(f, app),
-            Mode::ProcessRestartInfo => self.render_process_restart_info(f, app),
-            Mode::FilterMenu => self.render_filter_menu(f, app),
-            Mode::ThemeSelection => self.render_theme_selection(f, app),
+            Mode::Help => {
+                self.render_main(f, app);
+                self.render_help(f, app);
+            }
+            Mode::About => {
+                self.render_main(f, app);
+                self.render_about(f, app);
+            }
+            Mode::Confirm(action) => {
+                self.render_main(f, app);
+                self.render_confirm(f, app, action);
+            }
+            Mode::BackupList => {
+                self.render_main(f, app);
+                self.render_backup_list(f, app);
+            }
+            Mode::ProcessRestartInfo => {
+                self.render_main(f, app);
+                self.render_process_restart_info(f, app);
+            }
+            Mode::FilterMenu => {
+                self.render_main(f, app);
+                self.render_filter_menu(f, app);
+            }
+            Mode::ThemeSelection => {
+                self.render_main(f, app);
+                self.render_theme_selection(f, app);
+            }
             Mode::Menu {
                 active_menu,
                 selected_item,
@@ -595,20 +616,21 @@ impl UI {
 
     fn render_help(&self, f: &mut Frame, app: &App) {
         // Create a centered dialog area
-        let area = centered_rect(90, 90, f.area());
+        let area = centered_rect(55, 50, f.area());
+
+        // Render shadow effect
+        render_dialog_shadow(f, area, &app.theme);
+
         f.render_widget(ratatui::widgets::Clear, area);
 
-        // Create outer block with title
-        let outer_block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(app.theme.dialog_border_fg))
-            .style(Style::default().fg(app.theme.help_fg).bg(app.theme.help_bg))
-            .title(vec![Span::styled(
-                " Path Commander - Help ",
-                Style::default()
-                    .fg(app.theme.dialog_title_fg)
-                    .add_modifier(Modifier::BOLD),
-            )]);
+        // Create outer block with title and enhanced floating effect
+        let title = vec![Span::styled(
+            " Path Commander - Help ",
+            Style::default()
+                .fg(app.theme.dialog_title_fg)
+                .add_modifier(Modifier::BOLD),
+        )];
+        let outer_block = create_floating_dialog_block(title, &app.theme);
 
         let inner_area = outer_block.inner(area);
         f.render_widget(outer_block, area);
@@ -631,127 +653,21 @@ impl UI {
                     .add_modifier(Modifier::BOLD),
             )]),
             Line::from("  ↑/↓, j/k        Move selection up/down"),
-            Line::from("  PgUp/PgDn       Move selection by 10"),
-            Line::from("  Home/End        Move to first/last item"),
+            Line::from("  PgUp/PgDn       Move by screen height"),
+            Line::from("  Home/End        Jump to first/last item"),
             Line::from("  Tab, ←/→        Switch between panels"),
             Line::from(""),
             Line::from(vec![Span::styled(
-                "Selection:",
+                "Marking Paths:",
                 Style::default()
                     .fg(app.theme.help_bold_fg)
                     .add_modifier(Modifier::BOLD),
             )]),
-            Line::from("  Space, Insert   Toggle mark on current"),
-            Line::from("  F2              Toggle mark (MC style)"),
-            Line::from("  Ctrl+A          Mark all in current scope"),
-            Line::from("  Ctrl+Shift+A    Mark all in both scopes"),
+            Line::from("  Ctrl+A          Mark all in current panel"),
+            Line::from("  Ctrl+Shift+A    Mark all in both panels"),
             Line::from("  Ctrl+D          Mark all duplicates"),
             Line::from("  Ctrl+Shift+D    Mark all dead paths"),
             Line::from("  Ctrl+N          Mark non-normalized paths"),
-            Line::from("  Ctrl+Shift+U    Unmark all"),
-            Line::from(""),
-            Line::from(vec![Span::styled(
-                "Filtering:",
-                Style::default()
-                    .fg(app.theme.help_bold_fg)
-                    .add_modifier(Modifier::BOLD),
-            )]),
-            Line::from("  /               Open filter menu"),
-            Line::from("                  • Clear filter (show all)"),
-            Line::from("                  • Dead paths"),
-            Line::from("                  • Duplicates"),
-            Line::from("                  • Non-normalized paths"),
-            Line::from("                  • Valid paths only"),
-            Line::from(""),
-            Line::from(vec![Span::styled(
-                "Appearance:",
-                Style::default()
-                    .fg(app.theme.help_bold_fg)
-                    .add_modifier(Modifier::BOLD),
-            )]),
-            Line::from("  t               Choose color theme"),
-            Line::from("                  • Dracula, Classic MC, Monokai"),
-            Line::from("                  • Load custom themes from ~/.pc/themes/"),
-        ];
-
-        // Right column content
-        let f5_label = if app.connection_mode == crate::app::ConnectionMode::Remote {
-            "  F5              Copy marked to other computer"
-        } else {
-            "  F5              Move marked to other panel"
-        };
-
-        let right_text = vec![
-            Line::from(vec![Span::styled(
-                "Actions:",
-                Style::default()
-                    .fg(app.theme.help_bold_fg)
-                    .add_modifier(Modifier::BOLD),
-            )]),
-            Line::from("  F3, Delete      Delete marked items"),
-            Line::from("  F4              Add new path"),
-            Line::from(f5_label),
-            Line::from("  F6              Move item up in order"),
-            Line::from("  F7              Remove all duplicates"),
-            Line::from("  F8              Remove all dead paths"),
-            Line::from("  F9              Normalize selected paths"),
-            Line::from("  F10             Create marked dead dirs"),
-            Line::from("  Enter           Edit current path"),
-            Line::from(""),
-            Line::from(vec![Span::styled(
-                "Save/Restore:",
-                Style::default()
-                    .fg(app.theme.help_bold_fg)
-                    .add_modifier(Modifier::BOLD),
-            )]),
-            Line::from("  Ctrl+S          Apply changes to registry"),
-            Line::from("  Ctrl+B          Create backup"),
-            Line::from("  Ctrl+R          Restore from backup"),
-            Line::from("  Ctrl+Z          Undo last operation"),
-            Line::from("  Ctrl+Y          Redo last undone operation"),
-            Line::from(""),
-            Line::from(vec![Span::styled(
-                "Privileges:",
-                Style::default()
-                    .fg(app.theme.help_bold_fg)
-                    .add_modifier(Modifier::BOLD),
-            )]),
-            Line::from("  Ctrl+E          Elevate to Administrator"),
-            Line::from(vec![
-                Span::raw("  "),
-                Span::styled(
-                    "USER mode:",
-                    Style::default().fg(app.theme.path_duplicate_fg),
-                ),
-                Span::raw(" MACHINE paths read-only"),
-            ]),
-            Line::from(vec![
-                Span::raw("  "),
-                Span::styled("ADMIN mode:", Style::default().fg(app.theme.path_valid_fg)),
-                Span::raw(" Full access to all paths"),
-            ]),
-            Line::from(""),
-            Line::from(vec![Span::styled(
-                "Remote:",
-                Style::default()
-                    .fg(app.theme.help_bold_fg)
-                    .add_modifier(Modifier::BOLD),
-            )]),
-            Line::from("  Ctrl+O          Connect to/disconnect from"),
-            Line::from("                  remote computer"),
-            Line::from("  --remote NAME   Connect on startup"),
-            Line::from("  F5              Copy paths between computers"),
-            Line::from(""),
-            Line::from(vec![Span::styled(
-                "Remote Limitations:",
-                Style::default()
-                    .fg(app.theme.help_bold_fg)
-                    .add_modifier(Modifier::BOLD),
-            )]),
-            Line::from("  • Path existence cannot be validated"),
-            Line::from("  • Directory creation (F10) unavailable"),
-            Line::from("  • Dead/alive status not detected"),
-            Line::from("  See Issue #24 for UNC path support"),
             Line::from(""),
             Line::from(vec![Span::styled(
                 "Color Legend:",
@@ -779,6 +695,61 @@ impl UI {
                 Span::styled("Green", Style::default().fg(app.theme.path_valid_fg)),
                 Span::raw(" - Valid, unique, normalized"),
             ]),
+        ];
+
+        // Right column content
+        let right_text = vec![
+            Line::from(vec![Span::styled(
+                "Undo/Redo:",
+                Style::default()
+                    .fg(app.theme.help_bold_fg)
+                    .add_modifier(Modifier::BOLD),
+            )]),
+            Line::from("  Ctrl+Z          Undo last operation"),
+            Line::from("  Ctrl+Y          Redo last undone operation"),
+            Line::from(""),
+            Line::from(vec![Span::styled(
+                "Privileges:",
+                Style::default()
+                    .fg(app.theme.help_bold_fg)
+                    .add_modifier(Modifier::BOLD),
+            )]),
+            Line::from(vec![
+                Span::raw("  "),
+                Span::styled(
+                    "USER mode:",
+                    Style::default().fg(app.theme.path_duplicate_fg),
+                ),
+                Span::raw(" MACHINE paths read-only"),
+            ]),
+            Line::from(vec![
+                Span::raw("  "),
+                Span::styled("ADMIN mode:", Style::default().fg(app.theme.path_valid_fg)),
+                Span::raw(" Full access to all paths"),
+            ]),
+            Line::from(""),
+            Line::from(vec![Span::styled(
+                "Remote Mode:",
+                Style::default()
+                    .fg(app.theme.help_bold_fg)
+                    .add_modifier(Modifier::BOLD),
+            )]),
+            Line::from("  --remote NAME   Connect on startup"),
+            Line::from(""),
+            Line::from("  Limitations:"),
+            Line::from("  • Path existence cannot be validated"),
+            Line::from("  • Directory creation unavailable"),
+            Line::from("  • Dead/alive status not detected"),
+            Line::from(""),
+            Line::from(vec![Span::styled(
+                "Themes:",
+                Style::default()
+                    .fg(app.theme.help_bold_fg)
+                    .add_modifier(Modifier::BOLD),
+            )]),
+            Line::from("  Built-in: Dracula, Classic MC, Monokai"),
+            Line::from("  Custom themes: ~/.pc/themes/*.ini"),
+            Line::from("  Compatible with MC skin files"),
         ];
 
         // Create paragraphs for each column
@@ -880,78 +851,67 @@ impl UI {
             Style::default().fg(app.theme.warning_fg),
         )]));
 
+        let title = vec![Span::styled(
+            " Process Restart Required ",
+            Style::default()
+                .fg(app.theme.dialog_title_fg)
+                .add_modifier(Modifier::BOLD),
+        )];
         let info = Paragraph::new(lines)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(app.theme.dialog_border_fg))
-                    .title(vec![Span::styled(
-                        " Process Restart Required ",
-                        Style::default()
-                            .fg(app.theme.dialog_title_fg)
-                            .bg(app.theme.dialog_title_bg)
-                            .add_modifier(Modifier::BOLD),
-                    )])
-                    .style(
-                        Style::default()
-                            .fg(app.theme.dialog_fg)
-                            .bg(app.theme.dialog_bg),
-                    ),
-            )
+            .block(create_floating_dialog_block(title, &app.theme))
             .alignment(Alignment::Left)
             .wrap(Wrap { trim: false });
 
-        let area = centered_rect(80, 80, f.area());
+        let area = centered_rect(55, 50, f.area());
+
+        // Render shadow effect
+        render_dialog_shadow(f, area, &app.theme);
+
         f.render_widget(ratatui::widgets::Clear, area);
         f.render_widget(info, area);
     }
 
     fn render_about(&self, f: &mut Frame, app: &App) {
-        // Create a centered dialog area (smaller to fit the simplified content)
-        let area = centered_rect(50, 35, f.area());
+        // Auto-size dialog to fit ASCII logo (24 chars wide) + content
+        let area = content_sized_rect(30, 16, f.area());
+
+        // Render shadow effect
+        render_dialog_shadow(f, area, &app.theme);
+
         f.render_widget(ratatui::widgets::Clear, area);
 
-        // Create outer block with title
-        let outer_block = Block::default()
-            .title("About Path Commander")
-            .title_style(
-                Style::default()
-                    .fg(app.theme.dialog_title_fg)
-                    .add_modifier(Modifier::BOLD),
-            )
-            .borders(Borders::ALL)
-            .border_style(
-                Style::default()
-                    .fg(app.theme.dialog_border_fg)
-                    .bg(app.theme.dialog_bg),
-            )
-            .style(
-                Style::default()
-                    .fg(app.theme.dialog_fg)
-                    .bg(app.theme.dialog_bg),
-            );
+        // Create outer block with enhanced floating effect
+        let title = vec![Span::styled(
+            " About Path Commander ",
+            Style::default()
+                .fg(app.theme.dialog_title_fg)
+                .add_modifier(Modifier::BOLD),
+        )];
+        let outer_block = create_floating_dialog_block(title, &app.theme);
 
         let inner_area = outer_block.inner(area);
         f.render_widget(outer_block, area);
 
-        // Build content with Alignment::Center
+        // Build content with ASCII logo and info
         let content = vec![
-            Line::from(vec![
-                Span::styled(
-                    "Path Commander",
-                    Style::default()
-                        .fg(app.theme.dialog_title_fg)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw("  v0.2.0"),
-            ]),
+            Line::from("    ____        __  __  "),
+            Line::from("   / __ \\____ _/ /_/ /_ "),
+            Line::from("  / /_/ / __ `/ __/ __ \\"),
+            Line::from(" / ____/ /_/ / /_/ / / /"),
+            Line::from("/_/    \\__,_/\\__/_/ /_/ "),
+            Line::from(Span::styled(
+                "             Commander",
+                Style::default()
+                    .fg(app.theme.dialog_title_fg)
+                    .add_modifier(Modifier::BOLD),
+            )),
+            Line::from(""),
+            Line::from("v0.3.0"),
             Line::from(""),
             Line::from("Windows PATH Environment Manager"),
             Line::from(""),
             Line::from("Copyright © 2025 Jesse Slaton"),
-            Line::from(""),
             Line::from("License: MIT License"),
-            Line::from(""),
             Line::from(""),
             Line::from(Span::styled(
                 "Press Esc or Enter to close",
@@ -1157,27 +1117,21 @@ impl UI {
 
         let text = message_lines;
 
+        let title = vec![Span::styled(
+            " Confirm ",
+            Style::default()
+                .fg(app.theme.dialog_title_fg)
+                .add_modifier(Modifier::BOLD),
+        )];
         let dialog = Paragraph::new(text)
-            .block(
-                Block::default()
-                    .title(vec![Span::styled(
-                        " Confirm ",
-                        Style::default()
-                            .fg(app.theme.dialog_title_fg)
-                            .bg(app.theme.dialog_title_bg)
-                            .add_modifier(Modifier::BOLD),
-                    )])
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(app.theme.dialog_border_fg))
-                    .style(
-                        Style::default()
-                            .fg(app.theme.dialog_fg)
-                            .bg(app.theme.dialog_bg),
-                    ),
-            )
+            .block(create_floating_dialog_block(title, &app.theme))
             .alignment(Alignment::Center);
 
-        let area = centered_rect(60, 30, f.area());
+        let area = centered_rect(40, 20, f.area());
+
+        // Render shadow effect
+        render_dialog_shadow(f, area, &app.theme);
+
         f.render_widget(ratatui::widgets::Clear, area);
         f.render_widget(dialog, area);
     }
@@ -1202,53 +1156,42 @@ impl UI {
             )]),
         ];
 
+        let title_spans = vec![Span::styled(
+            title,
+            Style::default()
+                .fg(app.theme.dialog_title_fg)
+                .add_modifier(Modifier::BOLD),
+        )];
         let input = Paragraph::new(text)
-            .block(
-                Block::default()
-                    .title(vec![Span::styled(
-                        title,
-                        Style::default()
-                            .fg(app.theme.dialog_title_fg)
-                            .bg(app.theme.dialog_title_bg)
-                            .add_modifier(Modifier::BOLD),
-                    )])
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(app.theme.dialog_border_fg))
-                    .style(
-                        Style::default()
-                            .fg(app.theme.dialog_fg)
-                            .bg(app.theme.dialog_bg),
-                    ),
-            )
+            .block(create_floating_dialog_block(title_spans, &app.theme))
             .alignment(Alignment::Left);
 
-        let area = centered_rect(70, 20, f.area());
+        let area = centered_rect(50, 15, f.area());
+
+        // Render shadow effect
+        render_dialog_shadow(f, area, &app.theme);
+
         f.render_widget(ratatui::widgets::Clear, area);
         f.render_widget(input, area);
     }
 
     fn render_file_browser(&self, f: &mut Frame, app: &App) {
-        let area = centered_rect(85, 75, f.area());
+        let area = centered_rect(60, 60, f.area());
+
+        // Render shadow effect
+        render_dialog_shadow(f, area, &app.theme);
 
         // Clear the area and render the main block
         f.render_widget(ratatui::widgets::Clear, area);
 
-        // Render the main block
-        let main_block = Block::default()
-            .title(vec![Span::styled(
-                " Browse Directories ",
-                Style::default()
-                    .fg(app.theme.dialog_title_fg)
-                    .bg(app.theme.dialog_title_bg)
-                    .add_modifier(Modifier::BOLD),
-            )])
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(app.theme.dialog_border_fg))
-            .style(
-                Style::default()
-                    .fg(app.theme.dialog_fg)
-                    .bg(app.theme.dialog_bg),
-            );
+        // Render the main block with enhanced floating effect
+        let title = vec![Span::styled(
+            " Browse Directories ",
+            Style::default()
+                .fg(app.theme.dialog_title_fg)
+                .add_modifier(Modifier::BOLD),
+        )];
+        let main_block = create_floating_dialog_block(title, &app.theme);
 
         f.render_widget(main_block.clone(), area);
 
@@ -1407,19 +1350,21 @@ impl UI {
             })
             .collect();
 
-        let list = List::new(items).block(
-            Block::default()
-                .title(" Select Backup to Restore ")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(app.theme.dialog_border_fg))
-                .style(
-                    Style::default()
-                        .fg(app.theme.dialog_fg)
-                        .bg(app.theme.dialog_bg),
-                ),
-        );
+        let title = vec![Span::styled(
+            " Select Backup to Restore ",
+            Style::default()
+                .fg(app.theme.dialog_title_fg)
+                .add_modifier(Modifier::BOLD),
+        )];
+        let list = List::new(items).block(create_floating_dialog_block(title, &app.theme));
 
-        let area = centered_rect(70, 50, f.area());
+        // Auto-size based on number of backups (max 15 visible, ~35 chars wide for filename)
+        let num_items = app.backup_list.len().min(15);
+        let area = content_sized_rect(40, num_items as u16 + 2, f.area());
+
+        // Render shadow effect
+        render_dialog_shadow(f, area, &app.theme);
+
         f.render_widget(ratatui::widgets::Clear, area);
         f.render_widget(list, area);
     }
@@ -1482,19 +1427,20 @@ impl UI {
             })
             .collect();
 
-        let list = List::new(items).block(
-            Block::default()
-                .title(" Filter Paths ")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(app.theme.dialog_border_fg))
-                .style(
-                    Style::default()
-                        .fg(app.theme.dialog_fg)
-                        .bg(app.theme.dialog_bg),
-                ),
-        );
+        let title = vec![Span::styled(
+            " Filter Paths ",
+            Style::default()
+                .fg(app.theme.dialog_title_fg)
+                .add_modifier(Modifier::BOLD),
+        )];
+        let list = List::new(items).block(create_floating_dialog_block(title, &app.theme));
 
-        let area = centered_rect(60, 60, f.area());
+        // Auto-size: longest description is ~40 chars, 5 items × 2 lines each = 10 lines
+        let area = content_sized_rect(45, 11, f.area());
+
+        // Render shadow effect
+        render_dialog_shadow(f, area, &app.theme);
+
         f.render_widget(ratatui::widgets::Clear, area);
         f.render_widget(list, area);
     }
@@ -1536,78 +1482,32 @@ impl UI {
             })
             .collect();
 
-        let list = List::new(items).block(
-            Block::default()
-                .title(" Select Theme ")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(app.theme.dialog_border_fg))
-                .style(
-                    Style::default()
-                        .fg(app.theme.dialog_fg)
-                        .bg(app.theme.dialog_bg),
-                ),
-        );
+        let title = vec![Span::styled(
+            " Select Theme ",
+            Style::default()
+                .fg(app.theme.dialog_title_fg)
+                .add_modifier(Modifier::BOLD),
+        )];
+        let list = List::new(items).block(create_floating_dialog_block(title, &app.theme));
 
-        // Add preview at the bottom
-        let area = centered_rect(70, 70, f.area());
+        // Auto-size based on number of themes and longest name
+        let num_themes = app.theme_list.len().min(15); // Max 15 visible themes
+        let max_name_len = app
+            .theme_list
+            .iter()
+            .map(|(name, _)| name.len())
+            .max()
+            .unwrap_or(20)
+            .min(40); // Cap at 40 chars
+
+        // Height: just the themes, no preview section
+        let area = content_sized_rect(max_name_len as u16 + 10, num_themes as u16 + 2, f.area());
+
+        // Render shadow effect
+        render_dialog_shadow(f, area, &app.theme);
+
         f.render_widget(ratatui::widgets::Clear, area);
-
-        // Split area for list and preview
-        let chunks = Layout::default()
-            .direction(ratatui::layout::Direction::Vertical)
-            .constraints([
-                Constraint::Min(10),   // Theme list
-                Constraint::Length(8), // Preview
-            ])
-            .split(area);
-
-        f.render_widget(list, chunks[0]);
-
-        // Render preview
-        let preview_lines = vec![
-            Line::from(vec![Span::styled(
-                "Preview:",
-                Style::default()
-                    .fg(app.theme.help_bold_fg)
-                    .add_modifier(Modifier::BOLD),
-            )]),
-            Line::from(vec![
-                Span::raw("  "),
-                Span::styled("Valid", Style::default().fg(app.theme.path_valid_fg)),
-                Span::raw(" • "),
-                Span::styled("Dead", Style::default().fg(app.theme.path_dead_fg)),
-                Span::raw(" • "),
-                Span::styled(
-                    "Duplicate",
-                    Style::default().fg(app.theme.path_duplicate_fg),
-                ),
-                Span::raw(" • "),
-                Span::styled(
-                    "Non-norm",
-                    Style::default().fg(app.theme.path_nonnormalized_fg),
-                ),
-            ]),
-            Line::from(""),
-            Line::from(vec![Span::styled(
-                "↑↓/jk Navigate  Enter Select  Esc Cancel  r Reload",
-                Style::default().fg(app.theme.info_fg),
-            )]),
-        ];
-
-        let preview = Paragraph::new(preview_lines)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(app.theme.dialog_border_fg))
-                    .style(
-                        Style::default()
-                            .fg(app.theme.dialog_fg)
-                            .bg(app.theme.dialog_bg),
-                    ),
-            )
-            .alignment(Alignment::Left);
-
-        f.render_widget(preview, chunks[1]);
+        f.render_widget(list, area);
     }
 
     fn get_status_color(&self, status: PathStatus, theme: &crate::theme::Theme) -> Color {
@@ -1618,6 +1518,73 @@ impl UI {
             PathStatus::NonNormalized => theme.path_nonnormalized_fg,
             PathStatus::DeadDuplicate => theme.path_dead_fg,
         }
+    }
+}
+
+/// Helper function to render a shadow effect for floating dialogs
+fn render_dialog_shadow(f: &mut Frame, dialog_area: Rect, theme: &Theme) {
+    // Only render shadow if there's space (not at edges)
+    if dialog_area.x + dialog_area.width < f.area().width
+        && dialog_area.y + dialog_area.height < f.area().height
+    {
+        // Render right shadow (1 column wide)
+        let right_shadow = Rect {
+            x: dialog_area.x + dialog_area.width,
+            y: dialog_area.y + 1,
+            width: 1,
+            height: dialog_area.height,
+        };
+        let shadow_block = Block::default().style(
+            Style::default()
+                .fg(Color::DarkGray)
+                .bg(theme.panel_normal_bg),
+        );
+        f.render_widget(shadow_block, right_shadow);
+
+        // Render bottom shadow (1 row tall)
+        let bottom_shadow = Rect {
+            x: dialog_area.x + 1,
+            y: dialog_area.y + dialog_area.height,
+            width: dialog_area.width,
+            height: 1,
+        };
+        let shadow_block = Block::default().style(
+            Style::default()
+                .fg(Color::DarkGray)
+                .bg(theme.panel_normal_bg),
+        );
+        f.render_widget(shadow_block, bottom_shadow);
+    }
+}
+
+/// Helper function to create an enhanced dialog block with floating effect
+fn create_floating_dialog_block<'a>(title: Vec<Span<'a>>, theme: &Theme) -> Block<'a> {
+    Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_style(
+            Style::default()
+                .fg(theme.dialog_border_fg)
+                .add_modifier(Modifier::BOLD),
+        )
+        .style(Style::default().fg(theme.dialog_fg).bg(theme.dialog_bg))
+}
+
+/// Helper function to create a rectangle sized to fit content with padding
+fn content_sized_rect(content_width: u16, content_height: u16, max_area: Rect) -> Rect {
+    // Add padding for borders and margins (2 for borders, 2 for internal padding)
+    let width = (content_width + 4).min(max_area.width);
+    let height = (content_height + 4).min(max_area.height);
+
+    // Center the rectangle
+    let x = max_area.x + (max_area.width.saturating_sub(width)) / 2;
+    let y = max_area.y + (max_area.height.saturating_sub(height)) / 2;
+
+    Rect {
+        x,
+        y,
+        width,
+        height,
     }
 }
 

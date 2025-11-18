@@ -138,11 +138,7 @@ pub fn get_menus(connection_mode: crate::app::ConnectionMode) -> Vec<Menu> {
 
     // Help menu
     let mut help_menu = Menu::new("Help", 'h');
-    help_menu.add_item(
-        "Keyboard Shortcuts",
-        Some("F1/?"),
-        MenuAction::KeyboardShortcuts,
-    );
+    help_menu.add_item("Help", Some("F1"), MenuAction::KeyboardShortcuts);
     help_menu.add_item("About", None, MenuAction::About);
     menus.push(help_menu);
 

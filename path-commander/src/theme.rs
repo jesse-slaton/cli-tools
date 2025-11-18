@@ -142,11 +142,11 @@ impl Theme {
             get_color_pair("core", "marked", Color::Yellow, Color::Black);
         let (header_fg, header_bg) = get_color_pair("core", "header", Color::White, Color::Blue);
 
-        // Parse [dialog] section
+        // Parse [dialog] section (MC uses gray backgrounds for dialogs)
         let (dialog_fg, dialog_bg) =
-            get_color_pair("dialog", "_default_", Color::White, Color::Blue);
+            get_color_pair("dialog", "_default_", Color::Black, Color::Gray);
         let (dialog_title_fg, dialog_title_bg) =
-            get_color_pair("dialog", "dtitle", Color::Yellow, Color::Blue);
+            get_color_pair("dialog", "dtitle", Color::Blue, Color::Gray);
         let (_dialog_focus_fg, dialog_focus_bg) =
             get_color_pair("dialog", "dfocus", dialog_fg, dialog_bg);
 
@@ -279,9 +279,8 @@ impl Theme {
         );
 
         let (warning_fg, warning_bg) =
-            get_color_pair("pathcommander", "warning", Color::Yellow, dialog_bg);
-        let (info_fg, info_bg) =
-            get_color_pair("pathcommander", "info", Color::LightCyan, dialog_bg);
+            get_color_pair("pathcommander", "warning", Color::Red, dialog_bg);
+        let (info_fg, info_bg) = get_color_pair("pathcommander", "info", dialog_fg, dialog_bg);
         let (success_fg, success_bg) =
             get_color_pair("pathcommander", "success", Color::Green, dialog_bg);
 
@@ -498,21 +497,21 @@ impl Theme {
             status_fg: Color::White,
             status_bg: Color::Black,
 
-            // Dialog colors
-            dialog_fg: Color::White,
-            dialog_bg: Color::Blue,
-            dialog_border_fg: Color::Cyan,
-            dialog_title_fg: Color::Yellow,
-            dialog_title_bg: Color::Blue,
+            // Dialog colors (MC-style gray dialogs)
+            dialog_fg: Color::Black,
+            dialog_bg: Color::Gray,
+            dialog_border_fg: Color::Black,
+            dialog_title_fg: Color::Blue,
+            dialog_title_bg: Color::Gray,
 
             // Error/status messages
             error_fg: Color::Red,
-            warning_fg: Color::Yellow,
-            warning_bg: Color::Blue,
-            info_fg: Color::LightCyan,
-            info_bg: Color::Blue,
+            warning_fg: Color::Red,
+            warning_bg: Color::Gray,
+            info_fg: Color::Black,
+            info_bg: Color::Gray,
             success_fg: Color::Green,
-            success_bg: Color::Blue,
+            success_bg: Color::Gray,
 
             // Button colors
             button_fg: Color::Black,
@@ -621,7 +620,7 @@ fn parse_mc_color(s: &str) -> Option<Color> {
         }
     }
 
-    // Handle named colors
+    // Handle named colors (MC skin format)
     match s.to_lowercase().as_str() {
         "black" => Some(Color::Black),
         "red" => Some(Color::Red),
@@ -631,14 +630,17 @@ fn parse_mc_color(s: &str) -> Option<Color> {
         "magenta" => Some(Color::Magenta),
         "cyan" => Some(Color::Cyan),
         "white" => Some(Color::White),
-        "brightblack" | "gray" | "grey" => Some(Color::DarkGray),
+        "gray" | "grey" => Some(Color::DarkGray),
+        "lightgray" | "lightgrey" => Some(Color::Gray),
+        "brown" => Some(Color::Rgb(165, 42, 42)), // Brown color
+        "brightblack" => Some(Color::DarkGray),
         "brightred" => Some(Color::LightRed),
         "brightgreen" => Some(Color::LightGreen),
         "brightyellow" => Some(Color::LightYellow),
         "brightblue" => Some(Color::LightBlue),
         "brightmagenta" => Some(Color::LightMagenta),
         "brightcyan" => Some(Color::LightCyan),
-        "brightwhite" => Some(Color::Gray),
+        "brightwhite" => Some(Color::White),
         _ => None,
     }
 }
