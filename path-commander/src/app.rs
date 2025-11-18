@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use crate::backup::{self, PathBackup};
-use crate::path_analyzer::{analyze_paths, normalize_path, PathInfo};
+use crate::path_analyzer::{analyze_paths, analyze_paths_with_remote, normalize_path, to_unc_path, PathInfo};
 use crate::permissions;
 use crate::registry::{self, PathScope, RemoteConnection};
 use crate::theme::Theme;
@@ -2222,7 +2222,8 @@ impl App {
     }
 
     /// Create a directory and its parent directories
-    fn create_directory(path: &str) -> Result<()> {
+    /// If remote_computer is provided, creates the directory on the remote computer using UNC path
+    fn create_directory_with_remote(path: &str, remote_computer: Option<&str>) -> Result<()> {
         use std::fs;
         use std::path::Path;
 
@@ -2232,10 +2233,30 @@ impl App {
 
         // Expand environment variables
         let expanded = normalize_path(path);
-        let path_obj = Path::new(&expanded);
+
+        // Determine the actual path to create
+        let actual_path = if let Some(computer_name) = remote_computer {
+            // Convert to UNC path for remote creation
+            to_unc_path(&expanded, computer_name)
+                .ok_or_else(|| anyhow::anyhow!("Cannot convert to UNC path: {}", expanded))?
+        } else {
+            expanded
+        };
+
+        let path_obj = Path::new(&actual_path);
 
         // Create directory with parents
-        fs::create_dir_all(path_obj)?;
+        fs::create_dir_all(path_obj).map_err(|e| {
+            if remote_computer.is_some() {
+                anyhow::anyhow!(
+                    "Failed to create remote directory '{}': {}. \
+                    Ensure C$ administrative shares are enabled and accessible.",
+                    actual_path, e
+                )
+            } else {
+                anyhow::anyhow!("Failed to create directory '{}': {}", actual_path, e)
+            }
+        })?;
 
         Ok(())
     }
@@ -2246,7 +2267,17 @@ impl App {
             return Ok(());
         }
 
-        match Self::create_directory(&self.pending_directory) {
+        // Determine if we're creating on remote computer
+        // In remote mode, User panel (right) is actually the remote machine
+        let remote_computer = if self.connection_mode == ConnectionMode::Remote
+            && self.active_panel == Panel::User
+        {
+            self.remote_connection.as_ref().map(|c| c.computer_name())
+        } else {
+            None
+        };
+
+        match Self::create_directory_with_remote(&self.pending_directory, remote_computer) {
             Ok(()) => {
                 // Directory created successfully - now add the path
                 match self.active_panel {
@@ -2254,7 +2285,11 @@ impl App {
                         self.machine_paths.push(self.pending_directory.clone());
                     }
                     Panel::User => {
-                        self.user_paths.push(self.pending_directory.clone());
+                        if self.connection_mode == ConnectionMode::Remote {
+                            self.remote_machine_paths.push(self.pending_directory.clone());
+                        } else {
+                            self.user_paths.push(self.pending_directory.clone());
+                        }
                     }
                 }
 
@@ -2281,6 +2316,15 @@ impl App {
         let mut skipped_count = 0;
         let mut failed_paths = Vec::new();
 
+        // Determine if we're creating on remote computer
+        let remote_computer = if self.connection_mode == ConnectionMode::Remote
+            && self.active_panel == Panel::User
+        {
+            self.remote_connection.as_ref().map(|c| c.computer_name())
+        } else {
+            None
+        };
+
         // Collect all marked dead paths
         let marked_paths: Vec<(usize, String)> = match self.active_panel {
             Panel::Machine => self
@@ -2298,21 +2342,42 @@ impl App {
                     }
                 })
                 .collect(),
-            Panel::User => self
-                .user_marked
-                .iter()
-                .filter_map(|&idx| {
-                    if idx < self.user_paths.len() && idx < self.user_info.len() {
-                        if !self.user_info[idx].exists {
-                            Some((idx, self.user_paths[idx].clone()))
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    }
-                })
-                .collect(),
+            Panel::User => {
+                if self.connection_mode == ConnectionMode::Remote {
+                    // In remote mode, User panel shows remote machine paths
+                    self.remote_machine_marked
+                        .iter()
+                        .filter_map(|&idx| {
+                            if idx < self.remote_machine_paths.len()
+                                && idx < self.remote_machine_info.len()
+                            {
+                                if !self.remote_machine_info[idx].exists {
+                                    Some((idx, self.remote_machine_paths[idx].clone()))
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        })
+                        .collect()
+                } else {
+                    self.user_marked
+                        .iter()
+                        .filter_map(|&idx| {
+                            if idx < self.user_paths.len() && idx < self.user_info.len() {
+                                if !self.user_info[idx].exists {
+                                    Some((idx, self.user_paths[idx].clone()))
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        })
+                        .collect()
+                }
+            }
         };
 
         // Try to create each directory
@@ -2322,7 +2387,7 @@ impl App {
                 continue;
             }
 
-            match Self::create_directory(&path) {
+            match Self::create_directory_with_remote(&path, remote_computer) {
                 Ok(()) => created_count += 1,
                 Err(_) => {
                     failed_paths.push(path);
@@ -2379,9 +2444,18 @@ impl App {
             }
             ConnectionMode::Remote => {
                 // In remote mode: analyze local machine vs remote machine paths
+                // Local paths are analyzed normally (no remote computer name)
                 self.machine_info = analyze_paths(&self.machine_paths, &self.remote_machine_paths);
-                self.remote_machine_info =
-                    analyze_paths(&self.remote_machine_paths, &self.machine_paths);
+
+                // Remote paths need UNC path validation - pass the remote computer name
+                let remote_computer_name = self.remote_connection
+                    .as_ref()
+                    .map(|conn| conn.computer_name());
+                self.remote_machine_info = analyze_paths_with_remote(
+                    &self.remote_machine_paths,
+                    &self.machine_paths,
+                    remote_computer_name,
+                );
 
                 // Update scrollbar content lengths
                 self.machine_scrollbar_state = self

@@ -5,6 +5,32 @@ All notable changes to Path Commander will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2025-01-17
+
+### Added
+- **UNC path support for remote computer PATH management** (Issue #24)
+  - Remote paths are now validated using UNC paths (`\\COMPUTERNAME\C$\...`)
+  - Accurate dead/alive path detection on remote computers
+  - Ability to create missing directories on remote systems
+  - Works seamlessly with existing administrative shares (C$, D$, etc.)
+
+### Changed
+- Path validation in remote mode now uses UNC paths to check if paths exist
+- Directory creation in remote mode now creates directories on the remote computer
+- Enhanced error messages for UNC path access failures with helpful troubleshooting hints
+
+### Technical
+- Added `to_unc_path()` helper function to convert local paths to UNC format
+- Added `path_exists_with_remote()` function for remote path validation
+- Added `analyze_paths_with_remote()` function with optional remote computer parameter
+- Updated `App::reanalyze()` to pass remote computer name when in remote mode
+- Updated directory creation functions to support UNC paths
+- Added comprehensive unit tests for UNC path functionality
+
+### Requirements
+- Requires C$ administrative shares to be enabled on remote computers (enabled by default on most Windows systems)
+- Same credentials used for remote registry access are used for UNC path access
+
 ## [0.5.0] - 2025-01-17
 
 ### Changed
@@ -153,6 +179,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Filter system for viewing specific path types
 - Function key display matching MC's buttonbar style
 
+[0.6.0]: https://github.com/jesse-slaton/cli-tools/releases/tag/v0.6.0
 [0.5.0]: https://github.com/jesse-slaton/cli-tools/releases/tag/v0.5.0
 [0.4.0]: https://github.com/jesse-slaton/cli-tools/releases/tag/v0.4.0
 [0.3.0]: https://github.com/jesse-slaton/cli-tools/releases/tag/v0.3.0

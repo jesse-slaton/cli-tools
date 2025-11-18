@@ -1,6 +1,32 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
+/// Convert a local path to UNC format for remote access
+/// Example: `C:\Program Files` on computer `SERVER` becomes `\\SERVER\C$\Program Files`
+pub fn to_unc_path(local_path: &str, computer_name: &str) -> Option<String> {
+    let expanded = expand_environment_variables(local_path);
+
+    // Check if it's already a UNC path
+    if expanded.starts_with(r"\\") {
+        return None;
+    }
+
+    // Extract drive letter (e.g., "C:" from "C:\Windows")
+    if expanded.len() >= 2 && expanded.chars().nth(1) == Some(':') {
+        let drive_letter = expanded.chars().next()?;
+        let rest_of_path = &expanded[2..];
+
+        // Convert to UNC: \\COMPUTERNAME\C$\rest\of\path
+        Some(format!(
+            r"\\{}\{}${}",
+            computer_name, drive_letter, rest_of_path
+        ))
+    } else {
+        // Not a standard drive-letter path
+        None
+    }
+}
+
 /// Status of a path entry
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PathStatus {
@@ -49,13 +75,22 @@ pub struct PathInfo {
 
 /// Analyze a list of path entries
 pub fn analyze_paths(paths: &[String], other_scope_paths: &[String]) -> Vec<PathInfo> {
+    analyze_paths_with_remote(paths, other_scope_paths, None)
+}
+
+/// Analyze a list of path entries with optional remote computer support
+pub fn analyze_paths_with_remote(
+    paths: &[String],
+    other_scope_paths: &[String],
+    remote_computer: Option<&str>,
+) -> Vec<PathInfo> {
     let mut results: Vec<PathInfo> = Vec::new();
     let mut seen_normalized: HashMap<String, usize> = HashMap::new();
 
     // First pass: normalize and check existence
     for (idx, path) in paths.iter().enumerate() {
         let normalized = normalize_path(path);
-        let exists = path_exists(&normalized);
+        let exists = path_exists_with_remote(&normalized, remote_computer);
         let needs_normalization = path != &normalized;
 
         // Track normalized paths for duplicate detection
@@ -118,12 +153,27 @@ fn determine_status(info: &PathInfo) -> PathStatus {
 
 /// Check if a path exists (file or directory)
 pub fn path_exists(path: &str) -> bool {
+    path_exists_with_remote(path, None)
+}
+
+/// Check if a path exists with optional remote computer support
+pub fn path_exists_with_remote(path: &str, remote_computer: Option<&str>) -> bool {
     if path.is_empty() {
         return false;
     }
 
     // Expand environment variables first
     let expanded = expand_environment_variables(path);
+
+    // If checking a remote path, convert to UNC
+    if let Some(computer_name) = remote_computer {
+        if let Some(unc_path) = to_unc_path(&expanded, computer_name) {
+            // Try to access the UNC path
+            return Path::new(&unc_path).exists();
+        }
+    }
+
+    // Local path or UNC conversion failed - check locally
     Path::new(&expanded).exists()
 }
 
@@ -790,6 +840,66 @@ mod tests {
             );
             assert_eq!(info[0].status, PathStatus::NonNormalized);
         }
+    }
+
+    #[test]
+    fn test_to_unc_path() {
+        // Test basic drive conversion
+        let result = to_unc_path(r"C:\Windows", "SERVER");
+        assert_eq!(result, Some(r"\\SERVER\C$\Windows".to_string()));
+
+        // Test with Program Files
+        let result = to_unc_path(r"C:\Program Files\App", "REMOTE-PC");
+        assert_eq!(
+            result,
+            Some(r"\\REMOTE-PC\C$\Program Files\App".to_string())
+        );
+
+        // Test with D: drive
+        let result = to_unc_path(r"D:\Data", "SERVER");
+        assert_eq!(result, Some(r"\\SERVER\D$\Data".to_string()));
+
+        // Test with environment variable (should be expanded first)
+        let systemroot = std::env::var("SYSTEMROOT").unwrap_or_default();
+        if !systemroot.is_empty() {
+            let result = to_unc_path(r"%SYSTEMROOT%\System32", "SERVER");
+            assert!(result.is_some());
+            let unc = result.unwrap();
+            assert!(unc.starts_with(r"\\SERVER\"));
+            assert!(unc.contains("System32"));
+        }
+
+        // Test already UNC path (should return None)
+        let result = to_unc_path(r"\\EXISTING\Share\Path", "SERVER");
+        assert_eq!(result, None);
+
+        // Test non-standard path (should return None)
+        let result = to_unc_path(r"RelativePath", "SERVER");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_path_exists_with_remote() {
+        // Test local path without remote computer
+        assert!(path_exists_with_remote(r"C:\Windows", None));
+
+        // Test empty path
+        assert!(!path_exists_with_remote("", None));
+        assert!(!path_exists_with_remote("", Some("SERVER")));
+
+        // Test with environment variable
+        assert!(path_exists_with_remote(r"%SYSTEMROOT%", None));
+    }
+
+    #[test]
+    fn test_analyze_paths_with_remote() {
+        // Test basic analysis with remote computer name
+        // Note: This test uses local paths and won't actually access a remote computer
+        let paths = vec![r"C:\Windows".to_string()];
+        let info = analyze_paths_with_remote(&paths, &[], Some("SERVER"));
+        assert_eq!(info.len(), 1);
+        // The path may or may not exist depending on whether SERVER\C$ is accessible
+        // So we just verify the function doesn't crash
     }
 
     #[test]
