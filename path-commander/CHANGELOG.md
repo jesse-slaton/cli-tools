@@ -5,6 +5,21 @@ All notable changes to Path Commander will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2025-01-17
+
+### Added
+- **Live theme preview in theme selector**
+  - Theme changes now apply instantly as you navigate with arrow keys (Up/Down) or vim keys (j/k)
+  - No need to press Enter to see what a theme looks like
+  - Press Esc to cancel and restore the original theme
+  - Press Enter to accept the currently previewed theme
+  - Much faster to find and select a theme you like
+
+### Technical
+- Added `original_theme` field to `App` struct to store theme before opening selector
+- Added `apply_selected_theme()` helper method for live theme application
+- Theme selector now clones current theme when opened and restores it on Esc
+
 ## [0.3.0] - 2025-01-17
 
 ### Added
@@ -128,6 +143,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Filter system for viewing specific path types
 - Function key display matching MC's buttonbar style
 
+[0.4.0]: https://github.com/jesse-slaton/cli-tools/releases/tag/v0.4.0
 [0.3.0]: https://github.com/jesse-slaton/cli-tools/releases/tag/v0.3.0
 [0.2.0]: https://github.com/jesse-slaton/cli-tools/releases/tag/v0.2.0
 [0.1.0]: https://github.com/jesse-slaton/cli-tools/releases/tag/v0.1.0

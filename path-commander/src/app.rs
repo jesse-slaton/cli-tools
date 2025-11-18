@@ -188,6 +188,7 @@ pub struct App {
     pub filter_menu_selected: usize, // Selected item in filter menu (0-4)
     pub theme_list: Vec<(String, bool)>, // List of available themes (name, is_builtin)
     pub theme_selected: usize,     // Selected theme in the theme selector
+    pub original_theme: Option<Theme>, // Theme before opening theme selector (for Esc cancellation)
     pub undo_stack: Vec<Operation>, // Stack of undoable operations
     pub redo_stack: Vec<Operation>, // Stack of redoable operations
     last_click_time: std::time::Instant, // Time of last mouse click for double-click detection
@@ -254,6 +255,7 @@ impl App {
             filter_menu_selected: 0,
             theme_list: Vec::new(), // Will be populated when theme selector is opened
             theme_selected: 0,
+            original_theme: None,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             last_click_time: std::time::Instant::now(),
@@ -846,7 +848,30 @@ impl App {
             .position(|(name, _)| name == current_name)
             .unwrap_or(0);
 
+        // Store original theme for Esc cancellation
+        self.original_theme = Some(self.theme.clone());
+
         self.mode = Mode::ThemeSelection;
+        Ok(())
+    }
+
+    /// Load and apply the currently selected theme (for live preview)
+    fn apply_selected_theme(&mut self) -> Result<()> {
+        if let Some((theme_name, is_builtin)) = self.theme_list.get(self.theme_selected) {
+            let new_theme = if *is_builtin {
+                Theme::builtin(theme_name)?
+            } else {
+                // Load from custom theme file
+                if let Some(theme_path) = crate::config::get_theme_path(theme_name) {
+                    Theme::from_mc_skin(&theme_path)?
+                } else {
+                    self.set_status(&format!("Theme file not found: {}", theme_name));
+                    return Ok(());
+                }
+            };
+
+            self.theme = new_theme;
+        }
         Ok(())
     }
 
@@ -855,36 +880,31 @@ impl App {
             KeyCode::Up | KeyCode::Char('k') => {
                 if self.theme_selected > 0 {
                     self.theme_selected -= 1;
+                    // Apply theme immediately for live preview
+                    self.apply_selected_theme()?;
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 if self.theme_selected < self.theme_list.len().saturating_sub(1) {
                     self.theme_selected += 1;
+                    // Apply theme immediately for live preview
+                    self.apply_selected_theme()?;
                 }
             }
             KeyCode::Enter => {
-                // Apply selected theme
-                if let Some((theme_name, is_builtin)) = self.theme_list.get(self.theme_selected) {
-                    let new_theme = if *is_builtin {
-                        Theme::builtin(theme_name)?
-                    } else {
-                        // Load from custom theme file
-                        if let Some(theme_path) = crate::config::get_theme_path(theme_name) {
-                            Theme::from_mc_skin(&theme_path)?
-                        } else {
-                            self.set_status(&format!("Theme file not found: {}", theme_name));
-                            self.mode = Mode::Normal;
-                            return Ok(());
-                        }
-                    };
-
-                    self.theme = new_theme;
+                // Keep the currently selected theme and close
+                if let Some((theme_name, _)) = self.theme_list.get(self.theme_selected) {
                     self.set_status(&format!("Theme changed to: {}", theme_name));
                 }
+                // Clear original theme since we're accepting the change
+                self.original_theme = None;
                 self.mode = Mode::Normal;
             }
             KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('t') => {
-                // Close menu without changing theme
+                // Restore original theme and close
+                if let Some(original) = self.original_theme.take() {
+                    self.theme = original;
+                }
                 self.mode = Mode::Normal;
             }
             KeyCode::Char('r') => {
@@ -3247,6 +3267,7 @@ mod tests {
             filter_menu_selected: 0,
             theme_list: Vec::new(),
             theme_selected: 0,
+            original_theme: None,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             last_click_time: std::time::Instant::now(),
