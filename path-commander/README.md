@@ -179,7 +179,7 @@ When connected to a remote computer:
 - `Ctrl+O` - Connect to/disconnect from remote computer
 
 #### Other
-- `Q`, `F10`, `Esc` - Exit (with confirmation if changes exist)
+- `F10` - Exit (with confirmation if changes exist)
 - `Ctrl+C` - Force quit
 
 ### Mouse Support
