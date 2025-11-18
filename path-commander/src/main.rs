@@ -189,8 +189,14 @@ fn run_app<B: ratatui::backend::Backend>(
                     match (key.code, key.modifiers) {
                         (KeyCode::Char('c'), KeyModifiers::CONTROL) => break,
                         (KeyCode::F(10), _) => {
-                            // F10 always triggers exit confirmation
-                            app.confirm_exit();
+                            // F10 with double-tap detection for quick exit
+                            // Only handle in Normal mode; let confirm dialog handle it when in Exit confirmation
+                            if !matches!(app.mode, app::Mode::Confirm(app::ConfirmAction::Exit)) {
+                                app.handle_f10_press();
+                            } else {
+                                // In Exit confirmation dialog - pass to dialog handler
+                                app.handle_input(key)?;
+                            }
                         }
                         _ => {
                             // Handle input in app

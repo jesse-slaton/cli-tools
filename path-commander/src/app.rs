@@ -612,6 +612,10 @@ impl App {
     fn handle_confirm_input(&mut self, key: KeyEvent, action: ConfirmAction) -> Result<()> {
         match key.code {
             KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
+                // For Exit action, require F10 instead of y/Enter
+                if matches!(action, ConfirmAction::Exit) {
+                    return Ok(());
+                }
                 self.mode = Mode::Normal;
                 match action {
                     ConfirmAction::Exit => {
@@ -632,6 +636,13 @@ impl App {
                         self.disconnect_from_remote()?;
                         self.set_status("Disconnected from remote computer");
                     }
+                }
+            }
+            KeyCode::F(10) => {
+                // F10 in Exit confirmation dialog = confirm exit
+                if matches!(action, ConfirmAction::Exit) {
+                    self.mode = Mode::Normal;
+                    self.should_exit = true;
                 }
             }
             KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
@@ -2174,6 +2185,12 @@ impl App {
         } else {
             self.should_exit = true;
         }
+    }
+
+    /// Handle F10 key press - shows exit confirmation dialog
+    pub fn handle_f10_press(&mut self) {
+        // Always show confirmation dialog (user must press F10 again in dialog to confirm)
+        self.mode = Mode::Confirm(ConfirmAction::Exit);
     }
 
     /// Check if a directory can be created (not network path, valid chars, etc.)

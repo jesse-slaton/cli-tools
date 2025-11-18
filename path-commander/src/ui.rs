@@ -1097,23 +1097,44 @@ impl UI {
         }
 
         message_lines.push(Line::from(""));
-        message_lines.push(Line::from(vec![
-            Span::styled(
-                "Y",
-                Style::default()
-                    .fg(app.theme.button_focused_fg)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled("es", Style::default().fg(app.theme.dialog_fg)),
-            Span::styled(" / ", Style::default().fg(app.theme.dialog_fg)),
-            Span::styled(
-                "N",
-                Style::default()
-                    .fg(app.theme.button_focused_fg)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled("o", Style::default().fg(app.theme.dialog_fg)),
-        ]));
+        // For Exit confirmation, show F10/Esc; for others, show Yes/No
+        if matches!(action, ConfirmAction::Exit) {
+            message_lines.push(Line::from(vec![
+                Span::styled(
+                    "F10",
+                    Style::default()
+                        .fg(app.theme.button_focused_fg)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(" to exit", Style::default().fg(app.theme.dialog_fg)),
+                Span::styled(" / ", Style::default().fg(app.theme.dialog_fg)),
+                Span::styled(
+                    "Esc",
+                    Style::default()
+                        .fg(app.theme.button_focused_fg)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(" to cancel", Style::default().fg(app.theme.dialog_fg)),
+            ]));
+        } else {
+            message_lines.push(Line::from(vec![
+                Span::styled(
+                    "Y",
+                    Style::default()
+                        .fg(app.theme.button_focused_fg)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled("es", Style::default().fg(app.theme.dialog_fg)),
+                Span::styled(" / ", Style::default().fg(app.theme.dialog_fg)),
+                Span::styled(
+                    "N",
+                    Style::default()
+                        .fg(app.theme.button_focused_fg)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled("o", Style::default().fg(app.theme.dialog_fg)),
+            ]));
+        }
 
         let text = message_lines;
 
