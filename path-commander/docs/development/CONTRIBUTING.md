@@ -238,7 +238,7 @@ path-commander/
 - Modal dialogs
 - Mouse support
 
-See [CLAUDE.md](CLAUDE.md) for detailed architectural information.
+See [CLAUDE.md](../../CLAUDE.md) for detailed architectural information.
 
 ### Common Development Tasks
 

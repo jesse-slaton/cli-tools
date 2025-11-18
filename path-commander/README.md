@@ -2,7 +2,7 @@
 
 A powerful Terminal User Interface (TUI) for managing Windows PATH environment variables, inspired by Midnight Commander.
 
-> **📖 New to Path Commander?** Check out the **[User Guide](USER_GUIDE.md)** for tutorials, examples, and detailed feature explanations!
+> **📖 New to Path Commander?** Check out the **[User Guide](docs/user/USER_GUIDE.md)** for tutorials, examples, and detailed feature explanations!
 
 ## Features
 
@@ -238,7 +238,7 @@ Path Commander is compatible with **any** Midnight Commander theme file. Popular
    Browse https://github.com/nkulikov/mc-skins or search GitHub for "midnight commander skins"
 
 3. **Create Your Own**
-   See `MC_COMPATIBILITY.md` for details on creating custom themes
+   See `docs/theming/MC_COMPATIBILITY.md` for details on creating custom themes
 
 ### Intelligent Color Mapping
 
@@ -407,17 +407,17 @@ Jesse Slaton (github@doxazo.net)
 Contributions are welcome! Please feel free to submit issues or pull requests.
 
 For developers:
-- See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines
-- See [TESTING.md](TESTING.md) for information about the test suite
+- See [CONTRIBUTING.md](docs/development/CONTRIBUTING.md) for development setup and guidelines
+- See [TESTING.md](docs/development/TESTING.md) for information about the test suite
 
 ## Documentation
 
-- **[USER_GUIDE.md](USER_GUIDE.md)** - Comprehensive user guide with tutorials and examples
-- **[CHANGELOG.md](CHANGELOG.md)** - Version history and release notes
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Development setup and contribution guidelines
-- **[TESTING.md](TESTING.md)** - Information about the test suite
-- **[MC_COMPATIBILITY.md](MC_COMPATIBILITY.md)** - Midnight Commander theme compatibility
-- **[KEYBINDING_REFERENCE.md](KEYBINDING_REFERENCE.md)** - Complete keyboard shortcut reference
+- **[USER_GUIDE.md](docs/user/USER_GUIDE.md)** - Comprehensive user guide with tutorials and examples
+- **[CHANGELOG.md](docs/development/CHANGELOG.md)** - Version history and release notes
+- **[CONTRIBUTING.md](docs/development/CONTRIBUTING.md)** - Development setup and contribution guidelines
+- **[TESTING.md](docs/development/TESTING.md)** - Information about the test suite
+- **[MC_COMPATIBILITY.md](docs/theming/MC_COMPATIBILITY.md)** - Midnight Commander theme compatibility
+- **[KEYBINDING_REFERENCE.md](docs/user/KEYBINDING_REFERENCE.md)** - Complete keyboard shortcut reference
 
 ## Roadmap
 

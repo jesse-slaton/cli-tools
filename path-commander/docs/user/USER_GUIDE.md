@@ -425,7 +425,7 @@ The directory is created automatically on first run.
 
 ### Creating Custom Themes
 
-See the [MC_COMPATIBILITY.md](MC_COMPATIBILITY.md) and [THEMING_DESIGN.md](THEMING_DESIGN.md) documents for details on:
+See the [MC_COMPATIBILITY.md](../theming/MC_COMPATIBILITY.md) and [THEMING_DESIGN.md](../theming/THEMING_DESIGN.md) documents for details on:
 - MC `.ini` file format
 - Color mappings between MC and Path Commander
 - Supported color notations (RGB, indices, names)
@@ -645,7 +645,7 @@ Access all features through menus if you forget shortcuts:
 - Press **F1** or **?** for in-app help
 - Visit: https://github.com/jesse-slaton/cli-tools
 - Report issues: https://github.com/jesse-slaton/cli-tools/issues
-- Read docs: [README.md](README.md), [CHANGELOG.md](CHANGELOG.md)
+- Read docs: [README.md](../../README.md), [CHANGELOG.md](../development/CHANGELOG.md)
 
 ---
 
