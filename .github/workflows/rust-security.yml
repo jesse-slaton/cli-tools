@@ -64,15 +64,13 @@ jobs:
         db-path = "~/.cargo/advisory-db"
         db-urls = ["https://github.com/rustsec/advisory-db"]
         version = 2
-        ignore = []
-
-        [[advisories.severity]]
         # Fail on actual security vulnerabilities
         vulnerability = "deny"
-        # Warn on unmaintained crates but don't fail
+        # Warn on unmaintained crates but don't fail the build
         unmaintained = "warn"
         unsound = "warn"
         notice = "warn"
+        ignore = []
 
         [licenses]
         version = 2
