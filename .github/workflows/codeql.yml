@@ -38,9 +38,12 @@ jobs:
       uses: actions/checkout@v4
 
     # Initializes the CodeQL tools for scanning.
-    # Note: Rust only supports build-mode 'none'. This may result in a "Low Rust analysis quality"
-    # diagnostic due to limited macro call resolution (~32% vs 50% threshold). This is expected and
-    # acceptable for Rust CodeQL analysis. The analysis still provides valuable security insights.
+    # KNOWN LIMITATION: Rust only supports build-mode 'none', which produces a "Low Rust analysis
+    # quality" warning due to limited macro expansion (~32% vs 50% threshold). This may cause:
+    # - Missed vulnerabilities in macro-heavy code (serde, tokio, procedural macros)
+    # - False positives in complex unsafe blocks
+    # No workaround exists. Consider supplementing with cargo-audit and cargo-deny for dependencies.
+    # See: https://github.com/orgs/community/discussions/161754
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v4
       with:

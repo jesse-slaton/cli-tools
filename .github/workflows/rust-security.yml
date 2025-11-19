@@ -1,0 +1,98 @@
+name: "Rust Security Audit"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: '0 2 * * 1'  # Weekly on Monday at 2:00 AM UTC
+
+jobs:
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install cargo-audit
+      run: cargo install cargo-audit
+
+    - name: Run cargo audit
+      working-directory: path-commander
+      run: cargo audit --json > audit-report.json || true
+
+    - name: Display audit results
+      working-directory: path-commander
+      run: |
+        echo "## Dependency Security Audit Results"
+        cargo audit || echo "Note: Vulnerabilities found (see above)"
+
+    - name: Upload audit report
+      uses: actions/upload-artifact@v4
+      with:
+        name: cargo-audit-report
+        path: path-commander/audit-report.json
+        retention-days: 30
+
+  dependency-check:
+    name: Dependency Checks
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install cargo-deny
+      run: cargo install cargo-deny
+
+    - name: Check dependencies for issues
+      working-directory: path-commander
+      run: |
+        # Create basic deny.toml if it doesn't exist
+        if [ ! -f deny.toml ]; then
+          cat > deny.toml << 'EOF'
+        [advisories]
+        db-path = "~/.cargo/advisory-db"
+        db-urls = ["https://github.com/rustsec/advisory-db"]
+        vulnerability = "deny"
+        unmaintained = "warn"
+        yanked = "deny"
+        notice = "warn"
+
+        [licenses]
+        unlicensed = "deny"
+        allow = [
+          "MIT",
+          "Apache-2.0",
+          "Apache-2.0 WITH LLVM-exception",
+          "BSD-2-Clause",
+          "BSD-3-Clause",
+          "ISC",
+          "Unicode-DFS-2016",
+          "Zlib",
+          "MPL-2.0",
+        ]
+        copyleft = "warn"
+
+        [bans]
+        multiple-versions = "warn"
+        wildcards = "allow"
+
+        [sources]
+        unknown-registry = "deny"
+        unknown-git = "deny"
+        EOF
+        fi
+
+        cargo deny check advisories
+        cargo deny check licenses || true
+        cargo deny check bans || true
