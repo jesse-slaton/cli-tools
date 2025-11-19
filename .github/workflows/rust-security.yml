@@ -67,7 +67,6 @@ jobs:
 
         [licenses]
         version = 2
-        unlicensed = "deny"
         allow = [
           "MIT",
           "Apache-2.0",
