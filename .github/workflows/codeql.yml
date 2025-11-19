@@ -29,7 +29,7 @@ jobs:
       matrix:
         include:
         - language: rust
-          build-mode: manual
+          build-mode: none
         - language: actions
           build-mode: none
 
@@ -38,6 +38,9 @@ jobs:
       uses: actions/checkout@v4
 
     # Initializes the CodeQL tools for scanning.
+    # Note: Rust only supports build-mode 'none'. This may result in a "Low Rust analysis quality"
+    # diagnostic due to limited macro call resolution (~32% vs 50% threshold). This is expected and
+    # acceptable for Rust CodeQL analysis. The analysis still provides valuable security insights.
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v4
       with:
@@ -45,14 +48,6 @@ jobs:
         build-mode: ${{ matrix.build-mode }}
         # For more details on CodeQL's query packs, refer to: https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning#using-queries-in-ql-packs
         # queries: security-extended,security-and-quality
-
-    # Build Rust code to improve analysis quality (macro resolution, type inference).
-    # This helps CodeQL resolve macro calls and improve the analysis quality metrics.
-    - if: matrix.language == 'rust'
-      name: Build Rust code
-      run: |
-        cd path-commander
-        cargo build --release
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
