@@ -29,7 +29,7 @@ jobs:
       matrix:
         include:
         - language: rust
-          build-mode: autobuild
+          build-mode: manual
         - language: actions
           build-mode: none
 
@@ -46,11 +46,13 @@ jobs:
         # For more details on CodeQL's query packs, refer to: https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning#using-queries-in-ql-packs
         # queries: security-extended,security-and-quality
 
-    # Autobuild attempts to build Rust code automatically.
-    # If autobuild fails, you can replace it with manual build commands.
-    - if: matrix.build-mode == 'autobuild'
-      name: Autobuild
-      uses: github/codeql-action/autobuild@v4
+    # Build Rust code to improve analysis quality (macro resolution, type inference).
+    # This helps CodeQL resolve macro calls and improve the analysis quality metrics.
+    - if: matrix.language == 'rust'
+      name: Build Rust code
+      run: |
+        cd path-commander
+        cargo build --release
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
