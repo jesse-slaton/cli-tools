@@ -67,4 +67,4 @@ See [hooks/README.md](./hooks/README.md) for more information.
 
 ## License
 
-See individual tool directories for license information.
+This project is licensed under the [MIT License](./LICENSE).
