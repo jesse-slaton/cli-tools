@@ -73,9 +73,9 @@ The left panel header will show:
 ├──────────────────────────┬──────────────────────────────────────┤
 │ MACHINE (System)         │ USER                                 │
 │ ┌──────────────────────┐ │ ┌──────────────────────────────────┐ │
-│ │☐ C:\Windows\System32 │ │ │☒ C:\Users\Me\AppData\Local\bin  │ │
-│ │☐ C:\Program Files... │ │ │☐ C:\MyTools                     │ │
-│ │☒ C:\OldPath (dead)   │ │ │☐ %USERPROFILE%\Scripts          │ │
+│ │[ ] C:\Windows\System │ │ │[X] C:\Users\Me\AppData\Loca...  │ │
+│ │[ ] C:\Program Fil... │ │ │[ ] C:\MyTools                   │ │
+│ │[X] C:\OldPath (dead) │ │ │[ ] %USERPROFILE%\Scripts        │ │
 │ └──────────────────────┘ │ └──────────────────────────────────┘ │
 ├──────────────────────────┴──────────────────────────────────────┤
 │ Ready | 2 changes pending            [Status Bar - 3 lines]    │

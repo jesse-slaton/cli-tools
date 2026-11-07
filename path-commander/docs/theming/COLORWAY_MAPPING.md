@@ -37,10 +37,10 @@ Provide feedback on any color choices that don't look right!
 ```
 │ MACHINE (System)     │ USER (Current User)                              │
 │ ┌──────────────────┐ │ ┌──────────────────────────────────────────────┐ │
-│ │①☐ C:\Windows\Sys │ │ │②☒ C:\Users\Me\App                           │ │  <- ① Normal
-│ │③☐ C:\Program File│ │ │④☐ C:\Missing\Path                           │ │  <- ③ Selected
-│ │⑤☒ C:\Duplicate   │ │ │⑥☐ C:\Duplicate                              │ │  <- ⑤ Marked
-│ │⑦☐ C:\PROGRA~1    │ │ │⑧☐ %USERPROFILE%\tools                       │ │
+│ │①[ ] C:\Windows\S │ │ │②[X] C:\Users\Me\App                         │ │  <- ① Normal
+│ │③[ ] C:\Program Fi│ │ │④[ ] C:\Missing\Path                         │ │  <- ③ Selected
+│ │⑤[X] C:\Duplicate │ │ │⑥[ ] C:\Duplicate                            │ │  <- ⑤ Marked
+│ │⑦[ ] C:\PROGRA~1  │ │ │⑧[ ] %USERPROFILE%\tools                     │ │
 │ │  ...             │ │ │  ...                                        │ │
 │ └──────────────────┘ │ └──────────────────────────────────────────────┘ │
 │ ⑨4 paths (1 marked) │ 4 paths (0 marked)                              │
@@ -67,10 +67,10 @@ Provide feedback on any color choices that don't look right!
 ## 3. MAIN SCREEN - Path Status Colors
 
 ```
-│ ☐ C:\Windows\System32           ← Valid path (exists)
-│ ☐ C:\Missing\Directory          ← Dead path (doesn't exist)
-│ ☐ C:\Duplicate                  ← Duplicate path
-│ ☐ C:\PROGRA~1                   ← Non-normalized path
+│ [ ] C:\Windows\System32         ← Valid path (exists)
+│ [ ] C:\Missing\Directory        ← Dead path (doesn't exist)
+│ [ ] C:\Duplicate                ← Duplicate path
+│ [ ] C:\PROGRA~1                 ← Non-normalized path
 ```
 
 ### Color Mapping:
@@ -89,10 +89,10 @@ Provide feedback on any color choices that don't look right!
 ## 4. MAIN SCREEN - Scrollbar
 
 ```
-│ │ ☐ Path 1        │║
-│ │ ☐ Path 2        │█  ← Scrollbar thumb
-│ │ ☐ Path 3        │║  ← Scrollbar track
-│ │ ☐ Path 4        │║
+│ │ [ ] Path 1      │║
+│ │ [ ] Path 2      │█  ← Scrollbar thumb
+│ │ [ ] Path 3      │║  ← Scrollbar track
+│ │ [ ] Path 4      │║
 ```
 
 ### Color Mapping:
