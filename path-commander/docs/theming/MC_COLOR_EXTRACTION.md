@@ -12,11 +12,11 @@ This document shows how Path Commander intelligently extracts colors from the un
 
 ### Dialog Colors (from `[dialog]` section)
 - **Dialog bg**: `rgb222` → (102, 102, 102) - Medium gray
-- **Dialog focus bg**: `rgb435` → (204, 153, 255) - **PURPLE/LAVENDER** ✨
+- **Dialog focus bg**: `rgb435` → (204, 153, 255) - **PURPLE/LAVENDER**
 - **Dialog title**: `rgb355` → (153, 255, 255) - Cyan
 
 ### File Highlight Colors (from `[filehighlight]` section)
-- **Directories**: `rgb335` → (153, 153, 255) - **LIGHT PURPLE** ✨
+- **Directories**: `rgb335` → (153, 153, 255) - **LIGHT PURPLE**
 - **Symlinks**: `rgb542` → (255, 204, 102) - Orange/peach
 - **Executables**: `rgb253` → (102, 255, 153) - Bright green
 
@@ -24,7 +24,7 @@ This document shows how Path Commander intelligently extracts colors from the un
 - **Error text**: `rgb511` → (255, 51, 51) - Bright red
 
 ### Button Bar Colors (from `[buttonbar]` section)
-- **Hotkey bg**: `rgb524` → (255, 102, 204) - **PINK** ✨
+- **Hotkey bg**: `rgb524` → (255, 102, 204) - **PINK**
 - **Button text**: `rgb555` → (255, 255, 255) - White
 
 ## Intelligent Mapping to Path Commander

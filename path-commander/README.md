@@ -2,7 +2,7 @@
 
 A powerful Terminal User Interface (TUI) for managing Windows PATH environment variables, inspired by Midnight Commander.
 
-> **📖 New to Path Commander?** Check out the **[User Guide](docs/user/USER_GUIDE.md)** for tutorials, examples, and detailed feature explanations!
+> **New to Path Commander?** Check out the **[User Guide](docs/user/USER_GUIDE.md)** for tutorials, examples, and detailed feature explanations!
 
 ## Features
 
@@ -14,10 +14,10 @@ A powerful Terminal User Interface (TUI) for managing Windows PATH environment v
   - Highlights non-normalized paths (short names, environment variables)
   - Cross-computer duplicate detection when in remote mode
 - **Color-Coded Display**:
-  - 🟢 Green: Valid, unique, normalized paths
-  - 🔴 Red: Dead paths (don't exist)
-  - 🟡 Yellow: Duplicate paths
-  - 🔵 Cyan: Non-normalized paths (can be expanded/normalized)
+  - Green: Valid, unique, normalized paths
+  - Red: Dead paths (don't exist)
+  - Yellow: Duplicate paths
+  - Cyan: Non-normalized paths (can be expanded/normalized)
 - **Multi-Select Operations**: Mark multiple paths with checkboxes for batch operations
 - **Path Operations**:
   - Add/Edit/Delete individual paths
@@ -122,18 +122,18 @@ When connected to a remote computer:
 
 #### Supported Operations on Remote
 
-✅ View remote MACHINE paths
-✅ Add/Edit/Delete remote paths
-✅ Normalize remote paths
-✅ Remove duplicates and dead paths
-✅ Copy paths between local and remote computers
-✅ Path existence validation via UNC paths (\\COMPUTERNAME\C$\...)
-✅ Create missing directories on remote (Shift+F10)
-✅ Accurate dead/alive path detection using UNC paths
-✅ Cross-computer duplicate detection
-✅ Undo/Redo operations
+- View remote MACHINE paths
+- Add/Edit/Delete remote paths
+- Normalize remote paths
+- Remove duplicates and dead paths
+- Copy paths between local and remote computers
+- Path existence validation via UNC paths (\\COMPUTERNAME\C$\...)
+- Create missing directories on remote (Shift+F10)
+- Accurate dead/alive path detection using UNC paths
+- Cross-computer duplicate detection
+- Undo/Redo operations
 
-❌ USER paths (only MACHINE paths for security)
+Not supported: USER paths (only MACHINE paths for security)
 
 #### Remote Mode Limitations
 
@@ -422,13 +422,13 @@ For developers:
 ## Roadmap
 
 Completed features:
-- ✅ Undo/redo functionality (v0.1.0)
-- ✅ Filter paths (v0.1.0)
-- ✅ Themes/color customization (v0.1.0+)
-- ✅ Menu system (v0.2.0)
-- ✅ Live theme preview (v0.4.0)
-- ✅ Remote computer management (v0.1.0)
-- ✅ UNC path support for remote validation (v0.6.0)
+- [x] Undo/redo functionality (v0.1.0)
+- [x] Filter paths (v0.1.0)
+- [x] Themes/color customization (v0.1.0+)
+- [x] Menu system (v0.2.0)
+- [x] Live theme preview (v0.4.0)
+- [x] Remote computer management (v0.1.0)
+- [x] UNC path support for remote validation (v0.6.0)
 
 Potential future features:
 - Export/import PATH to various formats (CSV, JSON, plain text)

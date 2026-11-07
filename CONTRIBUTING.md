@@ -247,4 +247,4 @@ By contributing, you agree that your contributions will be licensed under the sa
 
 Contributors will be recognized in release notes and the project README.
 
-Thank you for contributing! 🎉
+Thank you for contributing!
