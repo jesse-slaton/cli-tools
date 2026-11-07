@@ -2,7 +2,7 @@
 
 Path Commander can load **real Midnight Commander .ini theme files** with intelligent fallbacks for PC-specific features.
 
-## ✅ What Works Out-of-the-Box
+## What Works Out-of-the-Box
 
 These MC sections are **fully supported** and will work perfectly:
 
@@ -19,7 +19,7 @@ These MC sections are **fully supported** and will work perfectly:
 
 **NEW**: Path Commander now extracts purple/lavender colors from `[dialog] dfocus` and `[buttonbar] hotkey` to automatically style borders, scrollbars, and indicators with the signature Dracula purple theme!
 
-## 🎨 Intelligent Fallbacks
+## Intelligent Fallbacks
 
 For Path Commander-specific features, we use **smart mappings** from MC themes:
 
@@ -42,7 +42,7 @@ For Path Commander-specific features, we use **smart mappings** from MC themes:
 | **Filter indicator** | `[pathcommander] filter_indicator` | `[dialog] dfocus` background | Purple |
 | **Admin warning** | `[pathcommander] admin_warning` | `[pathcommander] warning` | Yellow |
 
-## 📋 Real Example: Dracula MC Theme
+## Real Example: Dracula MC Theme
 
 When loading the official Dracula MC theme (`dracula256.ini`), Path Commander will:
 
@@ -63,7 +63,7 @@ When loading the official Dracula MC theme (`dracula256.ini`), Path Commander wi
    - Scrollbar thumb: `rgb524` (MC button hotkey = pink)
    - Filter indicator: `rgb435` (MC dialog focus = purple/lavender)
 
-## 🔧 How to Use MC Themes
+## How to Use MC Themes
 
 ### Method 1: Use Existing MC Skins (Zero-Copy)
 
@@ -120,14 +120,14 @@ info = rgb355;color0
 success = rgb335;color0
 ```
 
-## 📚 Popular MC Themes
+## Popular MC Themes
 
 Compatible with themes from:
 - [Dracula for MC](https://draculatheme.com/midnight-commander)
 - [MC Skins Collection](https://github.com/iwfmp/mc-skins)
 - Any standard MC .ini theme
 
-## ⚠️ Limitations
+## Limitations
 
 **What WON'T be used from MC themes:**
 
@@ -139,7 +139,7 @@ Compatible with themes from:
 | `[diffviewer]` | PC doesn't have a diff viewer |
 | `[widget-panel]` | Overlaps with `[core]`, not needed |
 
-## 🎯 Best Practices
+## Best Practices
 
 ### For Best Results:
 
@@ -176,7 +176,7 @@ path_duplicate = yellow;black
 path_nonnormalized = cyan;black
 ```
 
-## 🔍 Testing Compatibility
+## Testing Compatibility
 
 To test an MC theme:
 
@@ -191,7 +191,7 @@ pc --theme path/to/theme.ini
 # - Do dialogs match theme?
 ```
 
-## 📊 Color Format Support
+## Color Format Support
 
 Path Commander supports MC's color notation:
 
@@ -201,7 +201,7 @@ Path Commander supports MC's color notation:
 - **Indexed**: `color0` through `color15`
 - **Default**: `default` (terminal default)
 
-## 🤝 Contributing MC Themes
+## Contributing MC Themes
 
 Found a great MC theme that works well? Add it to `themes/` and submit a PR!
 

@@ -73,9 +73,9 @@ The left panel header will show:
 ├──────────────────────────┬──────────────────────────────────────┤
 │ MACHINE (System)         │ USER                                 │
 │ ┌──────────────────────┐ │ ┌──────────────────────────────────┐ │
-│ │☐ C:\Windows\System32 │ │ │☑ C:\Users\Me\AppData\Local\bin  │ │
+│ │☐ C:\Windows\System32 │ │ │☒ C:\Users\Me\AppData\Local\bin  │ │
 │ │☐ C:\Program Files... │ │ │☐ C:\MyTools                     │ │
-│ │☑ C:\OldPath (dead)   │ │ │☐ %USERPROFILE%\Scripts          │ │
+│ │☒ C:\OldPath (dead)   │ │ │☐ %USERPROFILE%\Scripts          │ │
 │ └──────────────────────┘ │ └──────────────────────────────────┘ │
 ├──────────────────────────┴──────────────────────────────────────┤
 │ Ready | 2 changes pending            [Status Bar - 3 lines]    │
@@ -91,10 +91,10 @@ The left panel header will show:
 
 Paths are color-coded to show their status:
 
-- **🟢 Green** - Valid, unique, normalized path
-- **🔴 Red** - Dead path (doesn't exist on filesystem)
-- **🟡 Yellow** - Duplicate path (exists elsewhere in PATH)
-- **🔵 Cyan** - Non-normalized path (contains `%VARIABLES%` or short names like `PROGRA~1`)
+- **Green** - Valid, unique, normalized path
+- **Red** - Dead path (doesn't exist on filesystem)
+- **Yellow** - Duplicate path (exists elsewhere in PATH)
+- **Cyan** - Non-normalized path (contains `%VARIABLES%` or short names like `PROGRA~1`)
 
 ### Panels
 
@@ -168,7 +168,7 @@ Mark items for batch operations using checkboxes:
 - **Shift+Click** - Mark all items between current selection and clicked item
 - **Click checkbox** - Toggle mark on that specific item
 
-Once items are marked (checkboxes show ☑), you can:
+Once items are marked (checkboxes show `[X]`), you can:
 - Delete them all at once (F3)
 - Move them to the other panel (F5)
 - Normalize them all (F9)
@@ -326,19 +326,19 @@ When connected, the interface changes:
 ### Remote Operations
 
 **What works**:
-- ✅ View remote MACHINE paths
-- ✅ Add, edit, delete remote paths
-- ✅ Normalize remote paths
-- ✅ Remove duplicates and dead paths on remote
-- ✅ Copy paths between local and remote computers (F5)
-- ✅ Validate path existence on remote (via UNC paths)
-- ✅ Create missing directories on remote (Shift+F10)
-- ✅ Undo/Redo
-- ✅ Cross-computer duplicate detection
+- View remote MACHINE paths
+- Add, edit, delete remote paths
+- Normalize remote paths
+- Remove duplicates and dead paths on remote
+- Copy paths between local and remote computers (F5)
+- Validate path existence on remote (via UNC paths)
+- Create missing directories on remote (Shift+F10)
+- Undo/Redo
+- Cross-computer duplicate detection
 
 **Limitations**:
-- ❌ Remote USER paths (security - only MACHINE paths accessible)
-- ⚠️ WM_SETTINGCHANGE messages don't affect remote processes (restart required)
+- Not supported: Remote USER paths (security - only MACHINE paths accessible)
+- Note: WM_SETTINGCHANGE messages don't affect remote processes (restart required)
 
 ### Copying Paths Between Computers
 
@@ -633,10 +633,10 @@ Access all features through menus if you forget shortcuts:
 
 | Color | Meaning |
 |-------|---------|
-| 🟢 Green | Valid, unique, normalized path |
-| 🔴 Red | Dead path (doesn't exist) |
-| 🟡 Yellow | Duplicate path |
-| 🔵 Cyan | Non-normalized path |
+| Green | Valid, unique, normalized path |
+| Red | Dead path (doesn't exist) |
+| Yellow | Duplicate path |
+| Cyan | Non-normalized path |
 
 ---
 

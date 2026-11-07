@@ -14,7 +14,7 @@ Provide feedback on any color choices that don't look right!
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ ①Path Commander v1.0.0 - Windows PATH Editor    ②[ADMIN] ⚠            │
+│ ①Path Commander v1.0.0 - Windows PATH Editor    ②[ADMIN] !            │
 ├──────────────────────┬──────────────────────────────────────────────────┤
 │ MACHINE (System)     │ USER (Current User)              ③Filter: Dead  │
 ```
@@ -25,7 +25,7 @@ Provide feedback on any color choices that don't look right!
 |---------|-------------|---------------|-------|
 | ① Header text | `header_fg` | Cyan #8be9fd | Main title bar text |
 | ① Header background | `header_bg` | Background #282a36 | Title bar background |
-| ② Admin warning | `admin_warning_fg` | Orange #ffb86c | "[ADMIN] ⚠" indicator |
+| ② Admin warning | `admin_warning_fg` | Orange #ffb86c | "[ADMIN] !" indicator |
 | ③ Filter indicator | `filter_indicator_fg` | Cyan #8be9fd | Active filter text |
 
 **Question**: Should admin warning be Orange, or use Yellow like other warnings?
@@ -37,9 +37,9 @@ Provide feedback on any color choices that don't look right!
 ```
 │ MACHINE (System)     │ USER (Current User)                              │
 │ ┌──────────────────┐ │ ┌──────────────────────────────────────────────┐ │
-│ │①☐ C:\Windows\Sys │ │ │②☑ C:\Users\Me\App                           │ │  <- ① Normal
+│ │①☐ C:\Windows\Sys │ │ │②☒ C:\Users\Me\App                           │ │  <- ① Normal
 │ │③☐ C:\Program File│ │ │④☐ C:\Missing\Path                           │ │  <- ③ Selected
-│ │⑤☑ C:\Duplicate   │ │ │⑥☐ C:\Duplicate                              │ │  <- ⑤ Marked
+│ │⑤☒ C:\Duplicate   │ │ │⑥☐ C:\Duplicate                              │ │  <- ⑤ Marked
 │ │⑦☐ C:\PROGRA~1    │ │ │⑧☐ %USERPROFILE%\tools                       │ │
 │ │  ...             │ │ │  ...                                        │ │
 │ └──────────────────┘ │ └──────────────────────────────────────────────┘ │
@@ -169,7 +169,7 @@ Provide feedback on any color choices that don't look right!
 │                                         │
 │  ②Apply the following changes?         │
 │                                         │
-│  ③⚠ USER scope (4 changes)              │
+│  ③! USER scope (4 changes)              │
 │    • Add: C:\New\Path                  │
 │    • Delete: C:\Old\Path               │
 │                                         │
@@ -187,7 +187,7 @@ Provide feedback on any color choices that don't look right!
 | ① Dialog border | `dialog_border_fg` | Cyan #8be9fd | Border and title |
 | ② Main text | `dialog_fg` | Foreground #f8f8f2 | Dialog message |
 | ② Dialog background | `dialog_bg` | Current Line #44475a | Dialog background |
-| ③ Warning text | `warning_fg` | Yellow #f1fa8c | "⚠" warnings |
+| ③ Warning text | `warning_fg` | Yellow #f1fa8c | "!" warnings |
 | ④ Info text | `info_fg` | Cyan #8be9fd | Informational notes |
 | ⑤ Button (unfocused) | `button_fg` | Current Line #44475a | Button text |
 | ⑤ Button (focused) | `button_focused_bg` | Green #50fa7b | Focused button bg |
@@ -203,7 +203,7 @@ Provide feedback on any color choices that don't look right!
 │                                     │
 │  ①✓ Successfully updated PATH       │
 │                                     │
-│  ②⚠ Running processes detected:    │
+│  ②! Running processes detected:    │
 │    • ③cmd.exe (2 instances)        │
 │    • ③powershell.exe               │
 │                                     │
@@ -218,7 +218,7 @@ Provide feedback on any color choices that don't look right!
 | Element | Theme Field | Dracula Color | Notes |
 |---------|-------------|---------------|-------|
 | ① Success header | `success_fg` | Green #50fa7b | "✓ Successfully..." |
-| ② Warning header | `warning_fg` | Yellow #f1fa8c | "⚠ Running processes..." |
+| ② Warning header | `warning_fg` | Yellow #f1fa8c | "! Running processes..." |
 | ③ Process names | `info_fg` | Cyan #8be9fd | Process list items |
 | ④ Note labels | `warning_fg` | Yellow #f1fa8c | "Note:" prefix |
 | ⑤ Footer message | `warning_fg` | Yellow #f1fa8c | "Press any key..." |

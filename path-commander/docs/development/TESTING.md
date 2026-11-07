@@ -46,47 +46,47 @@ cargo test --test integration_test
 ## Test Coverage
 
 ### Path Analyzer Module (`src/path_analyzer.rs`)
-- ✅ Path normalization (environment variables, trailing slashes)
-- ✅ Path existence checking
-- ✅ Duplicate detection (case-insensitive, cross-scope)
-- ✅ Dead path detection
-- ✅ Path status determination
-- ✅ Environment variable expansion
-- ✅ Edge cases (empty paths, multiple duplicates)
+- Path normalization (environment variables, trailing slashes)
+- Path existence checking
+- Duplicate detection (case-insensitive, cross-scope)
+- Dead path detection
+- Path status determination
+- Environment variable expansion
+- Edge cases (empty paths, multiple duplicates)
 
 **Tests**: 22 unit tests
 
 ### Backup Module (`src/backup.rs`)
-- ✅ Backup creation and serialization
-- ✅ Save/load roundtrip
-- ✅ Backup listing and filtering
-- ✅ Old backup cleanup
-- ✅ Directory creation
-- ✅ Error handling (invalid JSON, nonexistent files)
-- ✅ Special characters and long paths
-- ✅ Multiple backups with distinct timestamps
+- Backup creation and serialization
+- Save/load roundtrip
+- Backup listing and filtering
+- Old backup cleanup
+- Directory creation
+- Error handling (invalid JSON, nonexistent files)
+- Special characters and long paths
+- Multiple backups with distinct timestamps
 
 **Tests**: 19 unit tests
 
 ### App Module (`src/app.rs`)
-- ✅ Panel toggling and scope conversion
-- ✅ Selection movement and bounds checking
-- ✅ Item marking/unmarking
-- ✅ Mode transitions
-- ✅ Path deletion (marked items)
-- ✅ Path normalization
-- ✅ Statistics generation
-- ✅ Viewport height management
-- ✅ Directory creation validation
-- ✅ State consistency after operations
+- Panel toggling and scope conversion
+- Selection movement and bounds checking
+- Item marking/unmarking
+- Mode transitions
+- Path deletion (marked items)
+- Path normalization
+- Statistics generation
+- Viewport height management
+- Directory creation validation
+- State consistency after operations
 
 **Tests**: 27 unit tests
 
 ### Integration Tests (`tests/integration_test.rs`)
-- ✅ Project structure validation
-- ✅ Binary configuration
-- ✅ Required dependencies
-- ✅ Dev dependencies
+- Project structure validation
+- Binary configuration
+- Required dependencies
+- Dev dependencies
 
 **Tests**: 4 integration tests
 

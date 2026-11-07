@@ -167,13 +167,13 @@ admin_warning = rgb553;rgb111      # Orange on Background
 **Visual Mock-up** (text representation):
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ Path Commander v1.0.0 - Windows PATH Editor              [ADMIN] ⚠     │  <- Cyan on Background, Orange warning
+│ Path Commander v1.0.0 - Windows PATH Editor              [ADMIN] !     │  <- Cyan on Background, Orange warning
 ├──────────────────────┬──────────────────────────────────────────────────┤
 │ MACHINE (System)     │ USER (Current User)                              │  <- Comment border
 │ ┌──────────────────┐ │ ┌──────────────────────────────────────────────┐ │
-│ │☐ C:\Windows\Sys  │ │ │☑ C:\Users\Me\App                            │ │  <- Green (valid)
+│ │☐ C:\Windows\Sys  │ │ │☒ C:\Users\Me\App                            │ │  <- Green (valid)
 │ │☐ C:\Program File │ │ │☐ C:\Missing\Path                            │ │  <- Red (dead)
-│ │☑ C:\Duplicate    │ │ │☐ C:\Duplicate                               │ │  <- Yellow (duplicate)
+│ │☒ C:\Duplicate    │ │ │☐ C:\Duplicate                               │ │  <- Yellow (duplicate)
 │ │☐ C:\PROGRA~1     │ │ │☐ %USERPROFILE%\tools                        │ │  <- Cyan (non-normalized)
 │ │  ...             │ │ │  ...                                        │ │
 │ └──────────────────┘ │ └──────────────────────────────────────────────┘ │
@@ -240,13 +240,13 @@ admin_warning = yellow;black
 **Visual Mock-up**:
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ Path Commander v1.0.0 - Windows PATH Editor              [ADMIN] ⚠     │  <- White on Blue, Yellow warning
+│ Path Commander v1.0.0 - Windows PATH Editor              [ADMIN] !     │  <- White on Blue, Yellow warning
 ├──────────────────────┬──────────────────────────────────────────────────┤
 │ MACHINE (System)     │ USER (Current User)                              │  <- White border
 │ ┌──────────────────┐ │ ┌──────────────────────────────────────────────┐ │
-│ │☐ C:\Windows\Sys  │ │ │☑ C:\Users\Me\App                            │ │  <- Green (valid)
+│ │☐ C:\Windows\Sys  │ │ │☒ C:\Users\Me\App                            │ │  <- Green (valid)
 │ │☐ C:\Program File │ │ │☐ C:\Missing\Path                            │ │  <- Red (dead)
-│ │☑ C:\Duplicate    │ │ │☐ C:\Duplicate                               │ │  <- Yellow (duplicate)
+│ │☒ C:\Duplicate    │ │ │☐ C:\Duplicate                               │ │  <- Yellow (duplicate)
 │ │☐ C:\PROGRA~1     │ │ │☐ %USERPROFILE%\tools                        │ │  <- Cyan (non-normalized)
 │ │  ...             │ │ │  ...                                        │ │
 │ └──────────────────┘ │ └──────────────────────────────────────────────┘ │

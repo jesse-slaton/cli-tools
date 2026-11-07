@@ -57,15 +57,15 @@ These keys are commonly intercepted by terminal emulators and should **NOT** be 
 ## SAFE Keybindings for TUI Applications
 
 ### Function Keys (F1-F12)
-✅ **SAFE (with notes):**
+**SAFE (with notes):**
 - **F1-F10** - Generally safe (F1 traditionally Help, F10 sometimes menu bar)
 - **F12** - Mostly safe (may conflict with dev tools in some terminals)
 
-❌ **AVOID:**
+**AVOID:**
 - **F11** - Fullscreen in most terminals
 
 ### Ctrl + Letter Combinations
-✅ **SAFE:**
+**SAFE:**
 - **Ctrl+A** - Select/Mark all
 - **Ctrl+B** - Backward/Back/Backup
 - **Ctrl+E** - Edit/End
@@ -86,19 +86,19 @@ These keys are commonly intercepted by terminal emulators and should **NOT** be 
 - **Ctrl+X** - Cut
 - **Ctrl+Y** - Redo/Yank
 
-⚠️ **CAUTION:**
+**CAUTION:**
 - **Ctrl+C** - Usually SIGINT, but can be caught in raw mode
 - **Ctrl+D** - EOF signal, be careful
 - **Ctrl+Z** - SIGTSTP, be careful
 - **Ctrl+Q/S** - May trigger XON/XOFF flow control in some terminals
 
-❌ **AVOID:**
+**AVOID:**
 - **Ctrl+W** - Close tab in many terminals
 - **Ctrl+T** - New tab in many terminals
 - **Ctrl+Tab** - Switch tabs
 
 ### Alt + Letter Combinations
-✅ **VERY SAFE (Recommended for custom actions):**
+**VERY SAFE (Recommended for custom actions):**
 - **Alt+A through Alt+Z** - Generally safe, commonly used in TUI apps
 - **Alt+0 through Alt+9** - Generally safe
 
@@ -107,18 +107,18 @@ These keys are commonly intercepted by terminal emulators and should **NOT** be 
 - Vim uses Alt combinations
 - Tmux uses Alt in some configurations
 
-✅ **Alt is the safest modifier** for custom application keybindings!
+**Alt is the safest modifier** for custom application keybindings!
 
 ### Shift + Function Keys
-✅ **SAFE:**
+**SAFE:**
 - **Shift+F1 through Shift+F12** - Generally safe
 
 ### Ctrl + Function Keys
-✅ **SAFE:**
+**SAFE:**
 - **Ctrl+F1 through Ctrl+F12** - Generally safe (avoid Ctrl+F11 just to be safe)
 
 ### Navigation Keys
-✅ **SAFE:**
+**SAFE:**
 - **Arrow keys** (Up, Down, Left, Right)
 - **Home, End**
 - **Page Up, Page Down**
@@ -127,7 +127,7 @@ These keys are commonly intercepted by terminal emulators and should **NOT** be 
 - **Insert**
 
 ### Special Keys
-✅ **SAFE:**
+**SAFE:**
 - **Escape** - Always safe
 - **Space** - Safe for application use
 
@@ -194,9 +194,9 @@ These keys are commonly intercepted by terminal emulators and should **NOT** be 
 - **Ctrl+N** - Mark all non-normalized
 - **Ctrl+Shift+U** - Unmark all
 
-### Filtering (⚠️ CONFLICT - See Issue #13)
-- **F11** ❌ - Dead paths (conflicts with fullscreen)
-- **F12** ⚠️ - Duplicates (may conflict)
+### Filtering (CONFLICT - See Issue #13)
+- **F11** - Dead paths (conflicts with fullscreen)
+- **F12** - Duplicates (may conflict)
 - **Shift+F11** - Non-normalized
 - **Ctrl+F11** - Valid paths
 
@@ -277,10 +277,10 @@ mark_all = "Ctrl+A"
 ## Summary
 
 **Golden Rules:**
-1. ✅ **Alt+Letter is safest** for custom features
-2. ✅ **F1-F10 are mostly safe** (avoid F11)
-3. ✅ **Ctrl+Letter is usually safe** (avoid Ctrl+C/D/Z/W/T/Tab)
-4. ❌ **Never use F11** (fullscreen in terminals)
-5. ❌ **Avoid Ctrl+Shift+[key]** (often terminal shortcuts)
-6. 📝 **Document all keybindings** in help screen and README
-7. 🧪 **Test on multiple terminals** before release
+1. **Alt+Letter is safest** for custom features
+2. **F1-F10 are mostly safe** (avoid F11)
+3. **Ctrl+Letter is usually safe** (avoid Ctrl+C/D/Z/W/T/Tab)
+4. **Never use F11** (fullscreen in terminals)
+5. **Avoid Ctrl+Shift+[key]** (often terminal shortcuts)
+6. **Document all keybindings** in help screen and README
+7. **Test on multiple terminals** before release
