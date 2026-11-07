@@ -171,10 +171,10 @@ admin_warning = rgb553;rgb111      # Orange on Background
 ├──────────────────────┬──────────────────────────────────────────────────┤
 │ MACHINE (System)     │ USER (Current User)                              │  <- Comment border
 │ ┌──────────────────┐ │ ┌──────────────────────────────────────────────┐ │
-│ │☐ C:\Windows\Sys  │ │ │☒ C:\Users\Me\App                            │ │  <- Green (valid)
-│ │☐ C:\Program File │ │ │☐ C:\Missing\Path                            │ │  <- Red (dead)
-│ │☒ C:\Duplicate    │ │ │☐ C:\Duplicate                               │ │  <- Yellow (duplicate)
-│ │☐ C:\PROGRA~1     │ │ │☐ %USERPROFILE%\tools                        │ │  <- Cyan (non-normalized)
+│ │[ ] C:\Windows\S  │ │ │[X] C:\Users\Me\App                          │ │  <- Green (valid)
+│ │[ ] C:\Program Fi │ │ │[ ] C:\Missing\Path                          │ │  <- Red (dead)
+│ │[X] C:\Duplicate  │ │ │[ ] C:\Duplicate                             │ │  <- Yellow (duplicate)
+│ │[ ] C:\PROGRA~1   │ │ │[ ] %USERPROFILE%\tools                      │ │  <- Cyan (non-normalized)
 │ │  ...             │ │ │  ...                                        │ │
 │ └──────────────────┘ │ └──────────────────────────────────────────────┘ │
 │ 4 paths (1 marked)   │ 4 paths (0 marked)                              │
@@ -244,10 +244,10 @@ admin_warning = yellow;black
 ├──────────────────────┬──────────────────────────────────────────────────┤
 │ MACHINE (System)     │ USER (Current User)                              │  <- White border
 │ ┌──────────────────┐ │ ┌──────────────────────────────────────────────┐ │
-│ │☐ C:\Windows\Sys  │ │ │☒ C:\Users\Me\App                            │ │  <- Green (valid)
-│ │☐ C:\Program File │ │ │☐ C:\Missing\Path                            │ │  <- Red (dead)
-│ │☒ C:\Duplicate    │ │ │☐ C:\Duplicate                               │ │  <- Yellow (duplicate)
-│ │☐ C:\PROGRA~1     │ │ │☐ %USERPROFILE%\tools                        │ │  <- Cyan (non-normalized)
+│ │[ ] C:\Windows\S  │ │ │[X] C:\Users\Me\App                          │ │  <- Green (valid)
+│ │[ ] C:\Program Fi │ │ │[ ] C:\Missing\Path                          │ │  <- Red (dead)
+│ │[X] C:\Duplicate  │ │ │[ ] C:\Duplicate                             │ │  <- Yellow (duplicate)
+│ │[ ] C:\PROGRA~1   │ │ │[ ] %USERPROFILE%\tools                      │ │  <- Cyan (non-normalized)
 │ │  ...             │ │ │  ...                                        │ │
 │ └──────────────────┘ │ └──────────────────────────────────────────────┘ │
 │ 4 paths (1 marked)   │ 4 paths (0 marked)                              │
@@ -350,10 +350,10 @@ pc --theme /path/to/custom.ini
 │                                                          │
 │  Preview:                                                │
 │  ┌────────────────────────────────────────────────────┐ │
-│  │☐ C:\Windows\System32               <- path_valid  │ │
-│  │☐ C:\Missing\Path                   <- path_dead   │ │
-│  │☐ C:\Duplicate                      <- path_dup    │ │
-│  │☐ %USERPROFILE%\tools               <- path_nonorm │ │
+│  │[ ] C:\Windows\System32             <- path_valid  │ │
+│  │[ ] C:\Missing\Path                 <- path_dead   │ │
+│  │[ ] C:\Duplicate                    <- path_dup    │ │
+│  │[ ] %USERPROFILE%\tools             <- path_nonorm │ │
 │  └────────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────┘
 ```
