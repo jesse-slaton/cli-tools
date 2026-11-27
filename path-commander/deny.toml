@@ -10,8 +10,13 @@ targets = ["x86_64-pc-windows-msvc"]
 [advisories]
 version = 2
 db-urls = ["https://github.com/rustsec/advisory-db"]
-# Vulnerabilities always fail. Unmaintained crates are checked for the whole
-# graph (not just direct dependencies) and fail unless listed here.
+# Vulnerabilities always fail. Unmaintained and unsound crates are checked for
+# the whole graph and fail unless listed here. Both must be set explicitly:
+# cargo-deny defaults them to "workspace", which skips crates that only other
+# dependencies use (an unsound transitive crate, like lru 0.12 via ratatui,
+# would pass).
+unmaintained = "all"
+unsound = "all"
 ignore = [
   { id = "RUSTSEC-2026-0543", reason = "chrono is flagged unmaintained, not vulnerable. It is a direct dependency used for backup timestamps; the advisory itself offers no safe upgrade. Revisit when migrating to jiff or time." },
 ]
