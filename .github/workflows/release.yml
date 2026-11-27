@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (e.g., v0.1.0)'
+        description: 'Existing tag to rebuild (e.g., v0.1.0). Builds and uploads the workflow artifact only; publishing happens on a tag push.'
         required: true
         type: string
 
