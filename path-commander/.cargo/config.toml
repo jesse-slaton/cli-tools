@@ -1,7 +1,10 @@
 # Statically link the C runtime into pc.exe (#43). Without this the MSVC build
 # imports VCRUNTIME140.dll, which is absent on a clean Windows machine and
-# makes the exe fail at launch with 0xC0000135. The Universal CRT
-# (api-ms-win-crt-*) ships with Windows 10+ and stays dynamic.
-# Note: a RUSTFLAGS env var would override this setting; none is set in CI.
+# makes the exe fail at launch with 0xC0000135. +crt-static links libcmt,
+# libvcruntime and libucrt statically, so the Universal CRT is linked in too
+# and pc.exe imports only Windows system DLLs.
+# Note: a RUSTFLAGS or CARGO_ENCODED_RUSTFLAGS environment variable replaces
+# this setting entirely; CI sets neither. Cargo finds this file from the
+# directory it runs in, so build from path-commander/.
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
