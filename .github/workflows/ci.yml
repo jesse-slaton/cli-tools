@@ -111,8 +111,12 @@ jobs:
           $out = & $dumpbin /dependents $exe
           if ($LASTEXITCODE -ne 0) { throw "dumpbin failed with exit code $LASTEXITCODE" }
           $deps = $out | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '\.dll$' }
+          # Every Windows exe imports KERNEL32; finding none means the parse failed.
+          if (-not ($deps -match '^kernel32\.dll$')) { throw 'dumpbin output had no KERNEL32.dll line; the dependency parse is broken' }
           Write-Host 'Dependencies:'
           $deps | ForEach-Object { Write-Host "  $_" }
           Write-Host ("pc.exe size: {0} bytes" -f (Get-Item $exe).Length)
-          $bad = @($deps | Where-Object { $_ -match '^(vcruntime|msvcp|concrt|vccorlib)' })
-          if ($bad.Count -gt 0) { throw ("VC++ runtime dependency found: " + ($bad -join ', ')) }
+          # The VC++ runtime must be gone, and so must the Universal CRT: +crt-static
+          # links both in, so either one here means the static runtime did not apply.
+          $bad = @($deps | Where-Object { $_ -match '^(vcruntime|msvcp|concrt|vccorlib|ucrtbase|api-ms-win-crt-)' })
+          if ($bad.Count -gt 0) { throw ("C runtime dependency found: " + ($bad -join ', ')) }
