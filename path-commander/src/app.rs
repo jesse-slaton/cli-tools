@@ -988,6 +988,8 @@ impl App {
                     self.move_selection(1);
                 }
             }
+            // A match guard would fall through to later arms and change behavior.
+            #[allow(clippy::collapsible_match)]
             MouseEventKind::ScrollDown => {
                 // Only scroll in Normal mode
                 if self.mode == Mode::Normal {
@@ -1244,6 +1246,8 @@ impl App {
                 // This used to be F5 Move, but now it's /Filter
                 // Adjust based on context
             }
+            // A match guard would fall through to later arms and change behavior.
+            #[allow(clippy::collapsible_match)]
             40..=90 => {
                 // This region contains conditional items (Undo/Redo) and final items (Save/Quit)
                 // Due to dynamic nature of hints, we'll handle Save and Quit conservatively
@@ -1906,7 +1910,7 @@ impl App {
                     .collect();
 
                 // Sort directories alphabetically (case-insensitive)
-                dirs.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+                dirs.sort_by_key(|a| a.name.to_lowercase());
 
                 self.file_browser_entries.extend(dirs);
             }
@@ -3191,6 +3195,8 @@ impl App {
                     };
                 }
             }
+            // A match guard would fall through to later arms and change behavior.
+            #[allow(clippy::collapsible_match)]
             KeyCode::Enter => {
                 // Execute selected menu action
                 if active_menu < menus.len() {
