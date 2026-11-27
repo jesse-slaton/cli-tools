@@ -1,0 +1,200 @@
+# Give a pull request the milestone of the issues it references.
+#
+# The PR body is scanned for the same references as pr-labels.yml: "Closes #N",
+# "Fixes #N", "Resolves #N", "Refs #N" and "Part of #N" (any tense, any case).
+# "Part of #N" matters here: it is how one PR of a multi-part issue links to that
+# issue without closing it, and such a PR still belongs to the issue's milestone.
+#
+# The milestone of the first referenced issue that has one is assigned, and only
+# when the PR has no milestone yet: a milestone set by hand is never replaced.
+# When the referenced issues sit in different milestones, one comment on the PR
+# lists them. Later edits update it in place, never duplicate it, and delete it
+# once the references no longer conflict. If a referenced issue cannot be read
+# (other than not existing), the note is left as it is for that run.
+#
+# This assigns only. It is not a required check and never blocks a merge.
+#
+# Trigger: pull_request_target runs this file as it is on the BASE branch, so a
+# PR cannot change what the job does, and it grants a fork PR the
+# pull-requests: write scope needed to set a milestone. That is safe here because
+# the job checks out no code and runs nothing from the PR. The PR body is
+# untrusted input: it is read as data inside the script, only matched by a regex
+# whose captured digits are parsed to integers, and never reaches a shell, an
+# expression interpolation, or an API path as text. Milestone titles written into
+# the conflict comment come from this repository's own milestones. PR comments
+# are untrusted too: the conflict comment is found by the sentinel AND by its
+# author being this workflow's bot, so a planted sentinel cannot point the
+# update or delete at someone else's comment.
+# Dependabot PRs reference no issues and are skipped.
+#
+# zizmor's dangerous-triggers audit flags pull_request_target on its presence
+# alone, so the inline ignore on `on:` below records the reasoning above where
+# the scan reads it. It covers the WHOLE `on:` block, not only this trigger: a
+# trigger added there later is silenced too, so justify any addition here.
+#
+# Copied from jesse-slaton/powershell-utilities (ported from canticle's
+# pr-milestone.yml).
+
+name: PR milestone
+
+on: # zizmor: ignore[dangerous-triggers] no checkout, PR body read as data only, see the Trigger note above
+  pull_request_target:
+    types: [opened, reopened, edited]
+
+permissions: {}
+
+jobs:
+  milestone:
+    name: Milestone from referenced issues
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
+    permissions:
+      issues: read
+      pull-requests: write
+    concurrency:
+      group: pr-milestone-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - name: Assign the milestone of referenced issues
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const prNumber = context.payload.pull_request.number;
+
+            const body = context.payload.pull_request.body || '';
+            const ref = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?|refs?|part\s+of)\s+#(\d+)\b/gi;
+            const issues = [...new Set([...body.matchAll(ref)].map((m) => parseInt(m[1], 10)))];
+            // Every reference costs one API call and the body is untrusted, so at
+            // most MAX_REFS distinct references are looked up.
+            const MAX_REFS = 25;
+            const truncated = issues.length > MAX_REFS;
+            if (truncated) {
+              core.warning(`The PR body references ${issues.length} issues; only the first ${MAX_REFS} are used.`);
+              issues.length = MAX_REFS;
+            }
+            core.info(issues.length > 0
+              ? `Referenced: ${issues.map((n) => `#${n}`).join(', ')}`
+              : 'The PR body references no issues.');
+
+            // Milestones in the order their first issue is referenced.
+            // A referenced number that does not exist (404) has no milestone. Any
+            // other read failure leaves the set of milestones unknown, so the
+            // conflict note below is left alone rather than judged on part of it.
+            const milestones = new Map();
+            let incomplete = false; // set when a referenced issue cannot be read
+            for (const issue_number of issues) {
+              let issue;
+              try {
+                ({ data: issue } = await github.rest.issues.get({ owner, repo, issue_number }));
+              } catch (err) {
+                if (err.status !== 404) incomplete = true;
+                core.warning(`Could not read #${issue_number}: ${err.message}`);
+                continue;
+              }
+              if (issue.pull_request || !issue.milestone) continue;
+              const { number, title } = issue.milestone;
+              if (!milestones.has(number)) milestones.set(number, { number, title, issues: [] });
+              milestones.get(number).issues.push(issue_number);
+            }
+            const entries = [...milestones.values()];
+            const target = entries[0];
+
+            // The conflict note is kept in step with the current references on every
+            // run: posted or updated while they span milestones, deleted once they no
+            // longer do, so an edited PR never keeps a stale warning.
+            //
+            // Only a comment this workflow's bot wrote counts as the note. The
+            // sentinel is plain text, so a PR author could put it in a comment of
+            // their own; matching on it alone would let them choose the comment the
+            // update or delete below acts on. A comment's author cannot be forged.
+            const sentinel = '<!-- pr-milestone-conflict -->';
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number: prNumber, per_page: 100,
+            });
+            // Every matching note, not only the first: an older copy of this
+            // workflow read only the first page of comments and could post a
+            // second note, so extras are removed here.
+            const notes = comments.filter((c) => c.body && c.body.includes(sentinel)
+              && c.user && c.user.type === 'Bot' && c.user.login === 'github-actions[bot]');
+            const [existing, ...extras] = notes;
+            // Another run on the same PR may already have deleted a note: a 404
+            // here means it is gone, which is the goal.
+            const deleteNote = async (c) => {
+              try {
+                await github.rest.issues.deleteComment({ owner, repo, comment_id: c.id });
+              } catch (err) {
+                if (err.status !== 404) throw err;
+              }
+            };
+
+            if (incomplete) {
+              core.warning('A referenced issue could not be read; the conflict note is left as it is.');
+            } else if (truncated) {
+              // More references than are looked up: a conflict cannot be judged, so
+              // the note says so, replacing any conflict warning that may be stale.
+              const capBody = [
+                sentinel,
+                `This PR references more than ${MAX_REFS} issues, so its milestone is not set automatically and milestone conflicts are not checked. Set the milestone by hand.`,
+              ].join('\n');
+              const [first, ...rest] = notes;
+              if (first) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner, repo: context.repo.repo, comment_id: first.id, body: capBody,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body: capBody,
+                });
+              }
+              for (const c of rest) {
+                await deleteNote(c);
+              }
+            } else if (milestones.size > 1) {
+              const list = entries
+                .map((m) => `- **${m.title}** (from ${m.issues.map((n) => `#${n}`).join(', ')})`)
+                .join('\n');
+              const note = [
+                sentinel,
+                'This PR references issues in more than one milestone:',
+                '',
+                list,
+                '',
+                `The milestone of the first one, **${target.title}**, is used unless the PR already has a milestone. Change it by hand if that is wrong.`,
+              ].join('\n');
+              if (existing) {
+                await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body: note });
+              } else {
+                await github.rest.issues.createComment({ owner, repo, issue_number: prNumber, body: note });
+              }
+              for (const c of extras) {
+                await deleteNote(c);
+              }
+              core.warning(`Referenced issues are in ${milestones.size} milestones; using "${target.title}".`);
+            } else if (notes.length > 0) {
+              for (const c of notes) {
+                await deleteNote(c);
+              }
+              core.info('Removed the conflict note: the references no longer span milestones.');
+            }
+
+            // With part of the references unread, the first one's milestone is
+            // unknown, so assigning from the rest could pick the wrong milestone.
+            if (incomplete || truncated) {
+              core.warning('Not assigning a milestone: not every referenced issue was read.');
+              return;
+            }
+
+            if (!target) {
+              core.info('No referenced issue has a milestone; nothing to assign.');
+              return;
+            }
+
+            // Current milestone from the API: the event payload can be stale.
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+            if (pr.milestone) {
+              core.info(`The PR already has milestone "${pr.milestone.title}"; leaving it.`);
+              return;
+            }
+            await github.rest.issues.update({ owner, repo, issue_number: prNumber, milestone: target.number });
+            core.info(`Assigned milestone "${target.title}".`);
