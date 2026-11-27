@@ -988,13 +988,9 @@ impl App {
                     self.move_selection(1);
                 }
             }
-            // A match guard would fall through to later arms and change behavior.
-            #[allow(clippy::collapsible_match)]
-            MouseEventKind::ScrollDown => {
-                // Only scroll in Normal mode
-                if self.mode == Mode::Normal {
-                    self.move_selection(-1);
-                }
+            // Only scroll in Normal mode
+            MouseEventKind::ScrollDown if self.mode == Mode::Normal => {
+                self.move_selection(-1);
             }
             _ => {}
         }
@@ -1246,23 +1242,19 @@ impl App {
                 // This used to be F5 Move, but now it's /Filter
                 // Adjust based on context
             }
-            // A match guard would fall through to later arms and change behavior.
-            #[allow(clippy::collapsible_match)]
-            40..=90 => {
-                // This region contains conditional items (Undo/Redo) and final items (Save/Quit)
-                // Due to dynamic nature of hints, we'll handle Save and Quit conservatively
-                // TODO: Make this more robust by calculating exact positions dynamically
-                if relative_x >= 70 {
-                    // Likely in the Save/Quit region
-                    if relative_x >= 79 {
-                        self.confirm_exit(); // QQuit
+            // This region contains conditional items (Undo/Redo) and final items (Save/Quit)
+            // Due to dynamic nature of hints, we'll handle Save and Quit conservatively
+            // TODO: Make this more robust by calculating exact positions dynamically
+            // Likely in the Save/Quit region
+            40..=90 if relative_x >= 70 => {
+                if relative_x >= 79 {
+                    self.confirm_exit(); // QQuit
+                } else {
+                    // Ctrl+SSave
+                    if self.has_changes {
+                        self.mode = Mode::Confirm(ConfirmAction::ApplyChanges);
                     } else {
-                        // Ctrl+SSave
-                        if self.has_changes {
-                            self.mode = Mode::Confirm(ConfirmAction::ApplyChanges);
-                        } else {
-                            self.set_status("No changes to save");
-                        }
+                        self.set_status("No changes to save");
                     }
                 }
             }
@@ -3195,17 +3187,13 @@ impl App {
                     };
                 }
             }
-            // A match guard would fall through to later arms and change behavior.
-            #[allow(clippy::collapsible_match)]
-            KeyCode::Enter => {
-                // Execute selected menu action
-                if active_menu < menus.len() {
-                    let menu = &menus[active_menu];
-                    if selected_item < menu.items.len() {
-                        let item = &menu.items[selected_item];
-                        if item.enabled {
-                            self.execute_menu_action(item.action)?;
-                        }
+            // Execute selected menu action
+            KeyCode::Enter if active_menu < menus.len() => {
+                let menu = &menus[active_menu];
+                if selected_item < menu.items.len() {
+                    let item = &menu.items[selected_item];
+                    if item.enabled {
+                        self.execute_menu_action(item.action)?;
                     }
                 }
             }
