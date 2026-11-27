@@ -14,9 +14,10 @@ permissions:
 env:
   # Pinned Rust toolchain; bump deliberately (keep in step with ci.yml).
   RUST_TOOLCHAIN: 1.97.0
-  # Pinned tool versions; bump deliberately.
+  # Pinned tool versions; bump deliberately. Each must be listed in the
+  # install-action manifest at the pinned SHA (manifests/<tool>.json).
   CARGO_AUDIT_VERSION: 0.22.2
-  CARGO_DENY_VERSION: 0.22.2
+  CARGO_DENY_VERSION: 0.22.1
 
 defaults:
   run:
@@ -44,6 +45,8 @@ jobs:
       uses: taiki-e/install-action@073e1fd0bc889c9aee68dbaaa927cde1b5653a83 # v2.90.11
       with:
         tool: cargo-audit@${{ env.CARGO_AUDIT_VERSION }}
+        # Fail rather than fall back to an unverified cargo-binstall download.
+        fallback: none
 
     # Fails the job when a vulnerability is found. Unmaintained and unsound
     # warnings do not fail cargo audit by default; cargo-deny covers the
@@ -87,6 +90,8 @@ jobs:
       uses: taiki-e/install-action@073e1fd0bc889c9aee68dbaaa927cde1b5653a83 # v2.90.11
       with:
         tool: cargo-deny@${{ env.CARGO_DENY_VERSION }}
+        # Fail rather than fall back to an unverified cargo-binstall download.
+        fallback: none
 
     # Policy lives in path-commander/deny.toml.
     - name: Check dependencies for issues
