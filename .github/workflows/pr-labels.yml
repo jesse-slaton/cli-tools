@@ -22,13 +22,18 @@
 # reaches a shell, an expression interpolation, or an API path as text.
 # Dependabot PRs reference no issues and are skipped.
 #
+# zizmor's dangerous-triggers audit flags pull_request_target on its presence
+# alone, so the inline ignore on `on:` below records the reasoning above where
+# the scan reads it. It covers the WHOLE `on:` block, not only this trigger: a
+# trigger added there later is silenced too, so justify any addition here.
+#
 # Copied from jesse-slaton/powershell-utilities (ported from watch-aware-preloader's
 # pr-labels.yml); the exclusive families are this repository's capitalized
 # Priority and LoE labels.
 
 name: PR labels
 
-on:
+on: # zizmor: ignore[dangerous-triggers] no checkout, PR body read as data only, see the Trigger note above
   pull_request_target:
     types: [opened, reopened, edited, synchronize]
 
