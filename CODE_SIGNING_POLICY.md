@@ -27,7 +27,7 @@ Nothing else is signed under this certificate. Third-party libraries are compile
 | Committers and reviewers | [Jesse Slaton (@jesse-slaton)](https://github.com/jesse-slaton) |
 | Approvers | [Jesse Slaton (@jesse-slaton)](https://github.com/jesse-slaton) |
 
-Contributions from anyone outside this list arrive as pull requests and are reviewed by a reviewer before merge. All members use multi-factor authentication on GitHub and SignPath.
+Contributions from anyone outside this list arrive as pull requests and are reviewed by a reviewer before merge. All members use multi-factor authentication on GitHub, and must enable it on their SignPath accounts.
 
 ## Privacy policy
 
