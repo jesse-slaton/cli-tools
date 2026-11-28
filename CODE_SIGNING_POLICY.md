@@ -33,7 +33,7 @@ Contributions from anyone outside this list arrive as pull requests and are revi
 
 This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
 
-The only network activity Path Commander performs is the remote management feature, which the user starts explicitly (`pc --remote COMPUTERNAME` or the connect dialog). It then reads and writes the PATH variables on that computer through the Windows Remote Registry service and checks path existence over administrative UNC shares (`\\COMPUTERNAME\C$\...`). No telemetry, update checks, or analytics are included.
+Apart from checking whether the folders on your PATH exist, which contacts the host of any UNC path (`\\server\share\...`) or mapped network drive on your PATH, the only network activity Path Commander performs is the remote management feature, which the user starts explicitly (`pc --remote COMPUTERNAME` or the connect dialog). It then reads and writes the PATH variables on that computer through the Windows Remote Registry service and checks path existence over administrative UNC shares (`\\COMPUTERNAME\C$\...`). No telemetry, update checks, or analytics are included.
 
 ## System changes
 
