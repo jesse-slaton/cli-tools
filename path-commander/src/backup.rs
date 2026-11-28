@@ -11,6 +11,8 @@ use time::OffsetDateTime;
 
 /// Set when the local UTC offset could not be determined and a timestamp fell
 /// back to UTC, so the caller can say so (stderr is hidden while the TUI runs).
+/// The caller clears it before each backup and consumes it after the save, so
+/// it describes only that backup.
 pub(crate) static LOCAL_OFFSET_UNAVAILABLE: AtomicBool = AtomicBool::new(false);
 
 /// Current local time. `now_local()` fails when the platform cannot determine

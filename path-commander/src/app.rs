@@ -2073,6 +2073,9 @@ impl App {
         let user_path = registry::join_paths(&self.user_original);
         let machine_path = registry::join_paths(&self.machine_original);
 
+        // Report the UTC fallback for this backup only: clear the flag first,
+        // then consume it after the save.
+        backup::LOCAL_OFFSET_UNAVAILABLE.store(false, std::sync::atomic::Ordering::Relaxed);
         let backup = PathBackup::new(
             user_path,
             machine_path,
@@ -2083,7 +2086,7 @@ impl App {
         let backup_dir = backup::get_default_backup_dir();
         let filepath = backup.save(&backup_dir)?;
 
-        if backup::LOCAL_OFFSET_UNAVAILABLE.load(std::sync::atomic::Ordering::Relaxed) {
+        if backup::LOCAL_OFFSET_UNAVAILABLE.swap(false, std::sync::atomic::Ordering::Relaxed) {
             self.set_status(&format!(
                 "Backup saved (UTC, local time zone unavailable): {}",
                 filepath.display()
