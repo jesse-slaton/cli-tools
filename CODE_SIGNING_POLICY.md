@@ -50,7 +50,10 @@ Path Commander has no installer. To install, extract `pc.exe` from the release z
 To uninstall:
 
 1. Delete `pc.exe`.
-2. Optionally delete `%USERPROFILE%\.pc\`, which holds settings, themes, and PATH backups. Restore a backup first if you want to roll back changes Path Commander made.
+2. Optionally delete Path Commander's data folder, which holds settings, themes, and PATH backups. Restore a backup first if you want to roll back changes Path Commander made. The data can be in these places:
+   - `%USERPROFILE%\.pc\`, but only if it contains a file named `.pathcommander`. That marker is how Path Commander recognizes its own folder. If `.pc` has no `.pathcommander` file, it belongs to another program: do not delete it.
+   - `%USERPROFILE%\.pathcommand\`, which Path Commander uses instead when `%USERPROFILE%\.pc\` already held another program's files.
+   - `%LOCALAPPDATA%\PathCommander\`, where older versions kept backups. Newer versions copy those backups to the folder above but leave the originals, and also save backups here if they cannot find your home folder.
 3. If you added the install folder to `PATH` yourself, remove that entry.
 
 ## Reporting a problem
