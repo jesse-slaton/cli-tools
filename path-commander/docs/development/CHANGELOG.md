@@ -5,6 +5,17 @@ All notable changes to Path Commander will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3] - 2026-11-27
+
+### Fixed
+- `pc.exe` now starts on Windows machines without the Visual C++ Redistributable. 0.6.2 exited at launch with error `0xC0000135` because it needed `VCRUNTIME140.dll`; the C runtime is now built into the exe (#43).
+
+### Security
+- Upgraded ratatui to 0.30, which drops `lru` 0.12 and its unsound-code advisory (#41).
+
+### Changed
+- Release builds are now pinned and reproducible: a locked toolchain, `--locked` dependencies, and a check that every release exe imports no C runtime DLL (#39, #43).
+
 ## [0.6.2] - 2025-01-17
 
 ### Fixed
@@ -199,6 +210,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Filter system for viewing specific path types
 - Function key display matching MC's buttonbar style
 
+[0.6.3]: https://github.com/jesse-slaton/cli-tools/releases/tag/v0.6.3
 [0.6.2]: https://github.com/jesse-slaton/cli-tools/releases/tag/v0.6.2
 [0.6.0]: https://github.com/jesse-slaton/cli-tools/releases/tag/v0.6.0
 [0.5.0]: https://github.com/jesse-slaton/cli-tools/releases/tag/v0.5.0
