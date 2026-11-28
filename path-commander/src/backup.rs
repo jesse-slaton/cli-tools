@@ -4,25 +4,27 @@ use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use time::format_description::well_known::Rfc3339;
 use time::macros::format_description;
 use time::OffsetDateTime;
 
-/// Set when the local UTC offset could not be determined and a timestamp fell
-/// back to UTC, so the caller can say so (stderr is hidden while the TUI runs).
-/// The caller clears it before each backup and consumes it after the save, so
-/// it describes only that backup.
-pub(crate) static LOCAL_OFFSET_UNAVAILABLE: AtomicBool = AtomicBool::new(false);
+/// Current local time, and whether it fell back to UTC. `now_local()` fails when
+/// the platform cannot determine the UTC offset; fall back to UTC rather than
+/// failing a backup over a timestamp, and report that so the caller can say so
+/// (stderr is hidden while the TUI runs).
+fn now() -> (OffsetDateTime, bool) {
+    match OffsetDateTime::now_local() {
+        Ok(local) => (local, false),
+        Err(_) => (OffsetDateTime::now_utc(), true),
+    }
+}
 
-/// Current local time. `now_local()` fails when the platform cannot determine
-/// the UTC offset; fall back to UTC rather than failing a backup over a timestamp,
-/// and record it in `LOCAL_OFFSET_UNAVAILABLE` so the fallback is visible.
-fn now() -> OffsetDateTime {
-    OffsetDateTime::now_local().unwrap_or_else(|_| {
-        LOCAL_OFFSET_UNAVAILABLE.store(true, Ordering::Relaxed);
-        OffsetDateTime::now_utc()
-    })
+/// The backup file name stamp, `YYYYMMDD_HHMMSS`.
+fn file_stamp(at: OffsetDateTime) -> Result<String> {
+    at.format(format_description!(
+        "[year][month][day]_[hour][minute][second]"
+    ))
+    .context("Failed to format backup file name timestamp")
 }
 
 /// A backup of PATH environment variables
@@ -33,6 +35,13 @@ pub struct PathBackup {
     pub machine_path: String,
     pub user_paths: Vec<String>,
     pub machine_paths: Vec<String>,
+    /// File name stamp taken from the same instant as `timestamp`, so the JSON
+    /// and the file name always agree. Not serialized; empty on a loaded backup.
+    #[serde(skip)]
+    file_stamp: String,
+    /// Whether `timestamp` fell back to UTC. Not serialized.
+    #[serde(skip)]
+    utc_fallback: bool,
 }
 
 impl PathBackup {
@@ -42,15 +51,27 @@ impl PathBackup {
         user_paths: Vec<String>,
         machine_paths: Vec<String>,
     ) -> Self {
+        // Read the clock once, so the stored timestamp, the file name and the
+        // reported fallback all describe the same instant.
+        let (at, utc_fallback) = now();
         Self {
-            timestamp: now()
+            timestamp: at
                 .format(&Rfc3339)
                 .expect("RFC 3339 formatting of the current time cannot fail"),
             user_path,
             machine_path,
             user_paths,
             machine_paths,
+            file_stamp: file_stamp(at)
+                .expect("formatting the current time as a file name stamp cannot fail"),
+            utc_fallback,
         }
+    }
+
+    /// Whether this backup's timestamp fell back to UTC because the local time
+    /// zone was unavailable.
+    pub fn used_utc_fallback(&self) -> bool {
+        self.utc_fallback
     }
 
     /// Save this backup to a file
@@ -58,13 +79,14 @@ impl PathBackup {
         // Create backup directory if it doesn't exist
         fs::create_dir_all(directory)?;
 
-        // Generate filename with timestamp
-        let timestamp = now()
-            .format(format_description!(
-                "[year][month][day]_[hour][minute][second]"
-            ))
-            .context("Failed to format backup file name timestamp")?;
-        let filename = format!("path_backup_{}.json", timestamp);
+        // Name the file from the instant `new` captured. A loaded backup has no
+        // stamp, so stamp it now.
+        let stamp = if self.file_stamp.is_empty() {
+            file_stamp(now().0)?
+        } else {
+            self.file_stamp.clone()
+        };
+        let filename = format!("path_backup_{}.json", stamp);
         let filepath = directory.join(filename);
 
         // Write to file
@@ -311,6 +333,29 @@ mod tests {
     fn test_backup_timestamp_is_rfc3339() {
         let backup = PathBackup::new(String::new(), String::new(), vec![], vec![]);
         OffsetDateTime::parse(&backup.timestamp, &Rfc3339).expect("RFC 3339 timestamp");
+    }
+
+    #[test]
+    fn test_file_name_matches_stored_timestamp() {
+        let temp_dir = TempDir::new().unwrap();
+        let backup = PathBackup::new(
+            "C:\\U".to_string(),
+            "C:\\M".to_string(),
+            vec!["C:\\U".to_string()],
+            vec!["C:\\M".to_string()],
+        );
+        let filepath = backup.save(temp_dir.path()).unwrap();
+
+        // "2026-11-27T13:04:05.123-08:00" -> "20261127_130405"
+        let expected: String = backup.timestamp[..19]
+            .chars()
+            .filter(|c| !matches!(c, '-' | ':'))
+            .map(|c| if c == 'T' { '_' } else { c })
+            .collect();
+        assert_eq!(
+            filepath.file_name().unwrap().to_str().unwrap(),
+            format!("path_backup_{}.json", expected)
+        );
     }
 
     #[test]
