@@ -24,11 +24,16 @@ jobs:
     name: Build Windows Release
     runs-on: windows-latest
     permissions:
-      # Only this job creates the release.
-      contents: write
+      # Read-only on purpose: the SignPath action forwards this job's
+      # GITHUB_TOKEN to SignPath's connector, so this job must never hold
+      # contents: write. The separate publish job creates the release.
+      contents: read
       # The SignPath action reads this run's job details and downloads the
       # unsigned workflow artifact with GITHUB_TOKEN.
       actions: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      version_no_v: ${{ steps.version.outputs.version_no_v }}
 
     steps:
       # A manual run names its tag in an input; reject anything that is not a
@@ -181,12 +186,32 @@ jobs:
             release/*.sha256
           retention-days: 5
 
+  publish:
+    name: Publish GitHub Release
+    needs: build-windows
+    # Only a tag push publishes. A manual dispatch, even one started from a
+    # tag, only rebuilds the workflow artifact: it never signs, so letting it
+    # publish would overwrite signed release assets with unsigned ones.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      # The artifact root is release/ (the common parent of the uploaded
+      # globs), so downloading into release/ recreates release/*.zip and
+      # release/*.sha256.
+      - name: Download release artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: path-commander-windows-x64
+          path: release
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
-        if: startsWith(github.ref, 'refs/tags/')
         with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: Path Commander ${{ steps.version.outputs.version }}
+          tag_name: ${{ needs.build-windows.outputs.version }}
+          name: Path Commander ${{ needs.build-windows.outputs.version }}
           draft: false
           prerelease: false
           generate_release_notes: true
@@ -194,19 +219,19 @@ jobs:
             release/*.zip
             release/*.sha256
           body: |
-            ## Path Commander ${{ steps.version.outputs.version }}
+            ## Path Commander ${{ needs.build-windows.outputs.version }}
 
             Windows PATH environment variable manager with TUI interface.
 
             ### Installation
-            1. Download `path-commander-${{ steps.version.outputs.version_no_v }}-windows-x64.zip`
+            1. Download `path-commander-${{ needs.build-windows.outputs.version_no_v }}-windows-x64.zip`
             2. Extract to a directory in your PATH
             3. Run `pc.exe`
 
             ### Verification
             Verify the download with SHA256:
             ```
-            certutil -hashfile path-commander-${{ steps.version.outputs.version_no_v }}-windows-x64.zip SHA256
+            certutil -hashfile path-commander-${{ needs.build-windows.outputs.version_no_v }}-windows-x64.zip SHA256
             ```
 
             ### Features
