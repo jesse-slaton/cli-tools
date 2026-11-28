@@ -119,6 +119,7 @@ jobs:
       # A manual dispatch never signs: it checks out a tag while the run's own
       # commit is the dispatching branch, so SignPath's origin verification
       # would not match the bytes being signed.
+
       # Signing must never switch off silently. Until onboarding is finished a
       # tag push without SignPath configured only warns; once it is, the
       # maintainer sets the repository variable SIGNING_REQUIRED=true so a
@@ -144,6 +145,9 @@ jobs:
           # the SignPath artifact configuration root is <pe-file>, not <zip-file>.
           path: path-commander/target/x86_64-pc-windows-msvc/release/pc.exe
           archive: false
+          # A re-run after a rejected or timed-out approval reuses the name.
+          overwrite: true
+          if-no-files-found: error
           retention-days: 1
 
       - name: Submit signing request to SignPath
@@ -173,6 +177,12 @@ jobs:
           if (-not (Test-Path $signed)) { throw "SignPath returned no signed/pc.exe" }
           $sig = Get-AuthenticodeSignature -FilePath $signed
           if ($sig.Status -ne 'Valid') { throw "Signature status is $($sig.Status): $($sig.StatusMessage)" }
+          if ($sig.SignerCertificate.Subject -notmatch 'O=SignPath Foundation') {
+            throw "Signer is '$($sig.SignerCertificate.Subject)', expected a SignPath Foundation certificate (O=SignPath Foundation)"
+          }
+          # Foundation certificates are short-lived; without a timestamp the
+          # signature stops validating when the certificate expires.
+          if ($null -eq $sig.TimeStamperCertificate) { throw "Signature has no timestamp" }
           Write-Host "Signed by: $($sig.SignerCertificate.Subject)"
           Write-Host "Timestamp: $($sig.TimeStamperCertificate.Subject)"
           Copy-Item $signed 'path-commander/target/x86_64-pc-windows-msvc/release/pc.exe' -Force
