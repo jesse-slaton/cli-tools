@@ -95,6 +95,24 @@ jobs:
         working-directory: path-commander
         run: cargo build --release --locked --target x86_64-pc-windows-msvc
 
+      # Every release build must carry the VERSIONINFO that the SignPath
+      # artifact configuration checks. This also catches a tag that does not
+      # match Cargo.toml before the binary ever reaches SignPath.
+      - name: Verify embedded version resource
+        shell: pwsh
+        env:
+          VERSION_NO_V: ${{ steps.version.outputs.version_no_v }}
+        run: |
+          $exe = 'path-commander/target/x86_64-pc-windows-msvc/release/pc.exe'
+          $info = (Get-Item $exe).VersionInfo
+          if ($info.ProductName -ne 'Path Commander') {
+            throw "pc.exe ProductName is '$($info.ProductName)', expected 'Path Commander' (VERSIONINFO not embedded?)"
+          }
+          if ($info.ProductVersion -ne $env:VERSION_NO_V) {
+            throw "pc.exe ProductVersion is '$($info.ProductVersion)' but the release tag says '$env:VERSION_NO_V'; bump Cargo.toml or fix the tag"
+          }
+          Write-Host "VERSIONINFO ok: $($info.ProductName) $($info.ProductVersion)"
+
       # --- Code signing (SignPath Foundation) --------------------------------
       # Runs only on a tag push, and only once the SignPath repository variables
       # exist, so releases keep working unsigned until onboarding is finished.
