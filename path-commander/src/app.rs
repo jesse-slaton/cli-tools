@@ -2083,7 +2083,14 @@ impl App {
         let backup_dir = backup::get_default_backup_dir();
         let filepath = backup.save(&backup_dir)?;
 
-        self.set_status(&format!("Backup saved: {}", filepath.display()));
+        if backup::LOCAL_OFFSET_UNAVAILABLE.load(std::sync::atomic::Ordering::Relaxed) {
+            self.set_status(&format!(
+                "Backup saved (UTC, local time zone unavailable): {}",
+                filepath.display()
+            ));
+        } else {
+            self.set_status(&format!("Backup saved: {}", filepath.display()));
+        }
         Ok(())
     }
 

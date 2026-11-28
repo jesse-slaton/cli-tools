@@ -4,14 +4,23 @@ use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use time::format_description::well_known::Rfc3339;
 use time::macros::format_description;
 use time::OffsetDateTime;
 
+/// Set when the local UTC offset could not be determined and a timestamp fell
+/// back to UTC, so the caller can say so (stderr is hidden while the TUI runs).
+pub(crate) static LOCAL_OFFSET_UNAVAILABLE: AtomicBool = AtomicBool::new(false);
+
 /// Current local time. `now_local()` fails when the platform cannot determine
-/// the UTC offset; fall back to UTC rather than failing a backup over a timestamp.
+/// the UTC offset; fall back to UTC rather than failing a backup over a timestamp,
+/// and record it in `LOCAL_OFFSET_UNAVAILABLE` so the fallback is visible.
 fn now() -> OffsetDateTime {
-    OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc())
+    OffsetDateTime::now_local().unwrap_or_else(|_| {
+        LOCAL_OFFSET_UNAVAILABLE.store(true, Ordering::Relaxed);
+        OffsetDateTime::now_utc()
+    })
 }
 
 /// A backup of PATH environment variables
@@ -323,6 +332,8 @@ mod tests {
         assert!(loaded
             .display_info()
             .contains("Backup from 2025-01-17 10:00:00\n"));
+        assert_eq!(loaded.user_paths, vec!["C:\\U".to_string()]);
+        assert_eq!(loaded.machine_paths, vec!["C:\\M".to_string()]);
         assert_eq!(list_backups(temp_dir.path()).unwrap().len(), 1);
     }
 
