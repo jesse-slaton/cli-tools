@@ -1,12 +1,18 @@
 use anyhow::{Context, Result};
-use chrono::Local;
 use serde::{Deserialize, Serialize};
 
-#[cfg(test)]
-use chrono::DateTime;
 use std::fs::{self, File};
 use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
+use time::format_description::well_known::Rfc3339;
+use time::macros::format_description;
+use time::OffsetDateTime;
+
+/// Current local time. `now_local()` fails when the platform cannot determine
+/// the UTC offset; fall back to UTC rather than failing a backup over a timestamp.
+fn now() -> OffsetDateTime {
+    OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc())
+}
 
 /// A backup of PATH environment variables
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,7 +32,9 @@ impl PathBackup {
         machine_paths: Vec<String>,
     ) -> Self {
         Self {
-            timestamp: Local::now().to_rfc3339(),
+            timestamp: now()
+                .format(&Rfc3339)
+                .expect("RFC 3339 formatting of the current time cannot fail"),
             user_path,
             machine_path,
             user_paths,
@@ -40,7 +48,11 @@ impl PathBackup {
         fs::create_dir_all(directory)?;
 
         // Generate filename with timestamp
-        let timestamp = Local::now().format("%Y%m%d_%H%M%S");
+        let timestamp = now()
+            .format(format_description!(
+                "[year][month][day]_[hour][minute][second]"
+            ))
+            .context("Failed to format backup file name timestamp")?;
         let filename = format!("path_backup_{}.json", timestamp);
         let filepath = directory.join(filename);
 
@@ -67,9 +79,14 @@ impl PathBackup {
     /// Get a formatted display string for this backup
     #[cfg(test)]
     pub fn display_info(&self) -> String {
-        let dt = DateTime::parse_from_rfc3339(&self.timestamp)
+        let dt = OffsetDateTime::parse(&self.timestamp, &Rfc3339)
             .ok()
-            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+            .and_then(|dt| {
+                dt.format(format_description!(
+                    "[year]-[month]-[day] [hour]:[minute]:[second]"
+                ))
+                .ok()
+            })
             .unwrap_or_else(|| self.timestamp.clone());
 
         format!(
@@ -259,6 +276,54 @@ mod tests {
         // Should match pattern: path_backup_YYYYMMDD_HHMMSS.json
         assert!(filename.starts_with("path_backup_"));
         assert!(filename.ends_with(".json"));
+    }
+
+    #[test]
+    fn test_backup_filename_digits() {
+        let temp_dir = TempDir::new().unwrap();
+        let backup = PathBackup::new(String::new(), String::new(), vec![], vec![]);
+        let filepath = backup.save(temp_dir.path()).unwrap();
+        let filename = filepath.file_name().unwrap().to_string_lossy().into_owned();
+
+        let stem = filename
+            .strip_prefix("path_backup_")
+            .and_then(|r| r.strip_suffix(".json"))
+            .expect("prefix and extension");
+        let (date, clock) = stem.split_once('_').expect("underscore separator");
+        assert_eq!(date.len(), 8);
+        assert_eq!(clock.len(), 6);
+        assert!(date.chars().all(|c| c.is_ascii_digit()));
+        assert!(clock.chars().all(|c| c.is_ascii_digit()));
+    }
+
+    #[test]
+    fn test_backup_timestamp_is_rfc3339() {
+        let backup = PathBackup::new(String::new(), String::new(), vec![], vec![]);
+        OffsetDateTime::parse(&backup.timestamp, &Rfc3339).expect("RFC 3339 timestamp");
+    }
+
+    #[test]
+    fn test_load_chrono_era_backup() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("path_backup_20250117_100000.json");
+        fs::write(
+            &path,
+            r#"{
+  "timestamp": "2025-01-17T10:00:00.123456789-08:00",
+  "user_path": "C:\\U",
+  "machine_path": "C:\\M",
+  "user_paths": ["C:\\U"],
+  "machine_paths": ["C:\\M"]
+}"#,
+        )
+        .unwrap();
+
+        let loaded = PathBackup::load(&path).unwrap();
+        assert_eq!(loaded.timestamp, "2025-01-17T10:00:00.123456789-08:00");
+        assert!(loaded
+            .display_info()
+            .contains("Backup from 2025-01-17 10:00:00\n"));
+        assert_eq!(list_backups(temp_dir.path()).unwrap().len(), 1);
     }
 
     #[test]
