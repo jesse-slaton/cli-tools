@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath artifact configuration for Path Commander (pc.exe).
+  SignPath stores the live copy in its web UI; this file is the reviewed source.
+  Paste it into: Project > Artifact Configurations > (default) > Edit.
+
+  The release workflow uploads pc.exe with `archive: false` and submits it with
+  `skip-decompress: true`, so the root element is the PE file itself.
+  The `version` parameter is sent by the workflow from the release tag, and the
+  metadata restrictions make SignPath refuse any binary whose embedded
+  VERSIONINFO (stamped by path-commander/build.rs) doesn't match its product
+  name, product version, or original file name.
+
+  file-version is deliberately not restricted: SignPath's docs don't say whether
+  it compares the FileVersion string (for example "0.6.3") or the four-part
+  numeric FILEVERSION that winresource stamps (0.6.3.0), and the Foundation only
+  requires product name and product version.
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+  </parameters>
+  <pe-file product-name="Path Commander" product-version="${version}" original-filename="pc.exe">
+    <authenticode-sign />
+  </pe-file>
+</artifact-configuration>

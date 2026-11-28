@@ -24,8 +24,16 @@ jobs:
     name: Build Windows Release
     runs-on: windows-latest
     permissions:
-      # Only this job creates the release.
-      contents: write
+      # Read-only on purpose: the SignPath action forwards this job's
+      # GITHUB_TOKEN to SignPath's connector, so this job must never hold
+      # contents: write. The separate publish job creates the release.
+      contents: read
+      # The SignPath action reads this run's job details and downloads the
+      # unsigned workflow artifact with GITHUB_TOKEN.
+      actions: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      version_no_v: ${{ steps.version.outputs.version_no_v }}
 
     steps:
       # A manual run names its tag in an input; reject anything that is not a
@@ -87,6 +95,98 @@ jobs:
         working-directory: path-commander
         run: cargo build --release --locked --target x86_64-pc-windows-msvc
 
+      # Every release build must carry the VERSIONINFO that the SignPath
+      # artifact configuration checks. This also catches a tag that does not
+      # match Cargo.toml before the binary ever reaches SignPath.
+      - name: Verify embedded version resource
+        shell: pwsh
+        env:
+          VERSION_NO_V: ${{ steps.version.outputs.version_no_v }}
+        run: |
+          $exe = 'path-commander/target/x86_64-pc-windows-msvc/release/pc.exe'
+          $info = (Get-Item $exe).VersionInfo
+          if ($info.ProductName -ne 'Path Commander') {
+            throw "pc.exe ProductName is '$($info.ProductName)', expected 'Path Commander' (VERSIONINFO not embedded?)"
+          }
+          if ($info.ProductVersion -ne $env:VERSION_NO_V) {
+            throw "pc.exe ProductVersion is '$($info.ProductVersion)' but the release tag says '$env:VERSION_NO_V'; bump Cargo.toml or fix the tag"
+          }
+          Write-Host "VERSIONINFO ok: $($info.ProductName) $($info.ProductVersion)"
+
+      # --- Code signing (SignPath Foundation) --------------------------------
+      # Runs only on a tag push, and only once the SignPath repository variables
+      # exist, so releases keep working unsigned until onboarding is finished.
+      # A manual dispatch never signs: it checks out a tag while the run's own
+      # commit is the dispatching branch, so SignPath's origin verification
+      # would not match the bytes being signed.
+
+      # Signing must never switch off silently. Until onboarding is finished a
+      # tag push without SignPath configured only warns; once it is, the
+      # maintainer sets the repository variable SIGNING_REQUIRED=true so a
+      # missing or mis-scoped SIGNPATH_ORGANIZATION_ID fails the release.
+      - name: Check signing configuration
+        if: github.event_name == 'push' && vars.SIGNPATH_ORGANIZATION_ID == ''
+        shell: pwsh
+        env:
+          SIGNING_REQUIRED: ${{ vars.SIGNING_REQUIRED }}
+        run: |
+          if ($env:SIGNING_REQUIRED -eq 'true') {
+            Write-Host "::error::SIGNING_REQUIRED is true but the SIGNPATH_ORGANIZATION_ID repository variable is empty or unset; refusing to publish an unsigned release."
+            exit 1
+          }
+          Write-Host "::warning::This release is NOT signed (SignPath is not configured)"
+
+      - name: Upload unsigned binary for signing
+        id: upload-unsigned
+        if: github.event_name == 'push' && vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          # archive: false uploads pc.exe as-is (artifact name = file name), so
+          # the SignPath artifact configuration root is <pe-file>, not <zip-file>.
+          path: path-commander/target/x86_64-pc-windows-msvc/release/pc.exe
+          archive: false
+          # A re-run after a rejected or timed-out approval reuses the name.
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Submit signing request to SignPath
+        id: sign
+        if: steps.upload-unsigned.outcome == 'success'
+        uses: signpath/github-action-submit-signing-request@a2c5b60d9c75f073142b653c354b632eedce097b # v3.2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          skip-decompress: true
+          wait-for-completion: true
+          # Release signing needs a manual approval in SignPath; give the
+          # approver an hour before the job gives up.
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed
+          parameters: |
+            version: ${{ toJSON(steps.version.outputs.version_no_v) }}
+
+      - name: Verify signature and swap in signed binary
+        if: steps.sign.outcome == 'success'
+        shell: pwsh
+        run: |
+          $signed = Join-Path $PWD 'signed/pc.exe'
+          if (-not (Test-Path $signed)) { throw "SignPath returned no signed/pc.exe" }
+          $sig = Get-AuthenticodeSignature -FilePath $signed
+          if ($sig.Status -ne 'Valid') { throw "Signature status is $($sig.Status): $($sig.StatusMessage)" }
+          if ($sig.SignerCertificate.Subject -notmatch 'O=SignPath Foundation') {
+            throw "Signer is '$($sig.SignerCertificate.Subject)', expected a SignPath Foundation certificate (O=SignPath Foundation)"
+          }
+          # Foundation certificates are short-lived; without a timestamp the
+          # signature stops validating when the certificate expires.
+          if ($null -eq $sig.TimeStamperCertificate) { throw "Signature has no timestamp" }
+          Write-Host "Signed by: $($sig.SignerCertificate.Subject)"
+          Write-Host "Timestamp: $($sig.TimeStamperCertificate.Subject)"
+          Copy-Item $signed 'path-commander/target/x86_64-pc-windows-msvc/release/pc.exe' -Force
+
       - name: Prepare release assets
         shell: bash
         env:
@@ -130,12 +230,32 @@ jobs:
             release/*.sha256
           retention-days: 5
 
+  publish:
+    name: Publish GitHub Release
+    needs: build-windows
+    # Only a tag push publishes. A manual dispatch, even one started from a
+    # tag, only rebuilds the workflow artifact: it never signs, so letting it
+    # publish would overwrite signed release assets with unsigned ones.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      # The artifact root is release/ (the common parent of the uploaded
+      # globs), so downloading into release/ recreates release/*.zip and
+      # release/*.sha256.
+      - name: Download release artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: path-commander-windows-x64
+          path: release
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
-        if: startsWith(github.ref, 'refs/tags/')
         with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: Path Commander ${{ steps.version.outputs.version }}
+          tag_name: ${{ needs.build-windows.outputs.version }}
+          name: Path Commander ${{ needs.build-windows.outputs.version }}
           draft: false
           prerelease: false
           generate_release_notes: true
@@ -143,19 +263,19 @@ jobs:
             release/*.zip
             release/*.sha256
           body: |
-            ## Path Commander ${{ steps.version.outputs.version }}
+            ## Path Commander ${{ needs.build-windows.outputs.version }}
 
             Windows PATH environment variable manager with TUI interface.
 
             ### Installation
-            1. Download `path-commander-${{ steps.version.outputs.version_no_v }}-windows-x64.zip`
+            1. Download `path-commander-${{ needs.build-windows.outputs.version_no_v }}-windows-x64.zip`
             2. Extract to a directory in your PATH
             3. Run `pc.exe`
 
             ### Verification
             Verify the download with SHA256:
             ```
-            certutil -hashfile path-commander-${{ steps.version.outputs.version_no_v }}-windows-x64.zip SHA256
+            certutil -hashfile path-commander-${{ needs.build-windows.outputs.version_no_v }}-windows-x64.zip SHA256
             ```
 
             ### Features
@@ -171,5 +291,8 @@ jobs:
             ### Requirements
             - Windows 10 or later
             - Administrator privileges for MACHINE path modifications
+
+            ### Code signing policy
+            See the [Code signing policy](https://github.com/${{ github.repository }}/blob/main/CODE_SIGNING_POLICY.md).
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
