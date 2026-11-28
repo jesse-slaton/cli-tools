@@ -8,21 +8,21 @@ on:
   schedule:
     - cron: '30 1 * * 1'  # Weekly on Monday at 1:30 AM UTC
 
+permissions:
+  contents: read
+
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
     timeout-minutes: ${{ (matrix.language == 'swift' && 120) || 360 }}
     permissions:
-      # required for all workflows
+      # required to upload the SARIF results to code scanning
       security-events: write
-
-      # required to fetch internal or private CodeQL packs
-      packages: read
-
-      # only required for workflows in private repositories
-      actions: read
       contents: read
+      # Not granted: "packages: read" (only for internal or private CodeQL packs)
+      # and "actions: read" (only for workflows in private repositories, per the
+      # github/codeql-action template). This repository is public.
 
     strategy:
       fail-fast: false
@@ -35,7 +35,9 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
     # Initializes the CodeQL tools for scanning.
     # KNOWN LIMITATION: Rust only supports build-mode 'none', which produces a "Low Rust analysis
@@ -45,7 +47,7 @@ jobs:
     # No workaround exists. Consider supplementing with cargo-audit and cargo-deny for dependencies.
     # See: https://github.com/orgs/community/discussions/161754
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v4
+      uses: github/codeql-action/init@915412ff23e8b7659517e607487dbeae018f2934 # v4.39.5
       with:
         languages: ${{ matrix.language }}
         build-mode: ${{ matrix.build-mode }}
@@ -53,6 +55,6 @@ jobs:
         # queries: security-extended,security-and-quality
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v4
+      uses: github/codeql-action/analyze@915412ff23e8b7659517e607487dbeae018f2934 # v4.39.5
       with:
         category: "/language:${{matrix.language}}"

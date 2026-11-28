@@ -1,0 +1,45 @@
+# cargo-deny policy for path-commander; run by .github/workflows/rust-security.yml
+# from this directory (`cargo deny check advisories licenses bans sources`).
+
+[graph]
+# path-commander is a Windows-only tool. Crates that Cargo.lock lists but that
+# are never built for this target (for example the termwiz and termina backends
+# that ratatui 0.30 pulls in as optional features) are not part of what ships.
+targets = ["x86_64-pc-windows-msvc"]
+
+[advisories]
+version = 2
+db-urls = ["https://github.com/rustsec/advisory-db"]
+# Vulnerabilities always fail. Unmaintained and unsound crates are checked for
+# the whole graph and fail unless listed here. Both must be set explicitly:
+# cargo-deny defaults them to "workspace", which skips crates that only other
+# dependencies use (an unsound transitive crate, like lru 0.12 via ratatui,
+# would pass).
+unmaintained = "all"
+unsound = "all"
+ignore = [
+  { id = "RUSTSEC-2026-0543", reason = "chrono is flagged unmaintained, not vulnerable. It is a direct dependency used for backup timestamps; the advisory itself offers no safe upgrade. Revisit when migrating to jiff or time." },
+]
+
+[licenses]
+version = 2
+# Every license in the Windows dependency tree, checked with `cargo deny list`.
+# configparser is "MIT OR LGPL-3.0-or-later"; the MIT option is the one used.
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "BSD-2-Clause",
+  "BSL-1.0",
+  "Unicode-3.0",
+  "Unlicense",
+  "Zlib",
+]
+
+[bans]
+# Duplicate versions are reported but do not fail the job.
+multiple-versions = "warn"
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

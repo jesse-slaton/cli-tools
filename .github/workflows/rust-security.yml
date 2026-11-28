@@ -1,6 +1,4 @@
 name: "Rust Security Audit"
-permissions:
-  contents: read
 
 on:
   push:
@@ -10,91 +8,91 @@ on:
   schedule:
     - cron: '0 2 * * 1'  # Weekly on Monday at 2:00 AM UTC
 
+permissions:
+  contents: read
+
+env:
+  # Pinned Rust toolchain; bump deliberately (keep in step with ci.yml).
+  RUST_TOOLCHAIN: 1.97.0
+  # Pinned tool versions; bump deliberately. Each must be listed in the
+  # install-action manifest at the pinned SHA (manifests/<tool>.json).
+  CARGO_AUDIT_VERSION: 0.22.2
+  CARGO_DENY_VERSION: 0.22.1
+
+defaults:
+  run:
+    working-directory: path-commander
+
 jobs:
   security-audit:
     name: Security Audit
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
     - name: Setup Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+      with:
+        toolchain: ${{ env.RUST_TOOLCHAIN }}
 
     - name: Install cargo-audit
-      run: cargo install cargo-audit
+      uses: taiki-e/install-action@073e1fd0bc889c9aee68dbaaa927cde1b5653a83 # v2.90.11
+      with:
+        tool: cargo-audit@${{ env.CARGO_AUDIT_VERSION }}
+        # Fail rather than fall back to an unverified cargo-binstall download.
+        fallback: none
 
+    # Fails the job when a vulnerability is found. Unmaintained and unsound
+    # warnings do not fail cargo audit by default; cargo-deny covers the
+    # unmaintained policy in the Dependency Checks job.
     - name: Run cargo audit
-      working-directory: path-commander
-      run: cargo audit --json > audit-report.json || true
+      run: cargo audit --json > audit-report.json
 
-    - name: Display audit results
-      working-directory: path-commander
-      run: |
-        echo "## Dependency Security Audit Results"
-        cargo audit || echo "Note: Vulnerabilities found (see above)"
-
+    # Runs even when the audit above failed, so the report is always kept.
     - name: Upload audit report
-      uses: actions/upload-artifact@v4
+      if: always()
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: cargo-audit-report
         path: path-commander/audit-report.json
         retention-days: 30
+        if-no-files-found: ignore
+
+    # Human-readable findings in the log when the audit failed.
+    - name: Display audit results
+      if: failure()
+      run: cargo audit
 
   dependency-check:
     name: Dependency Checks
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
     - name: Setup Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+      with:
+        toolchain: ${{ env.RUST_TOOLCHAIN }}
 
     - name: Install cargo-deny
-      run: cargo install cargo-deny
+      uses: taiki-e/install-action@073e1fd0bc889c9aee68dbaaa927cde1b5653a83 # v2.90.11
+      with:
+        tool: cargo-deny@${{ env.CARGO_DENY_VERSION }}
+        # Fail rather than fall back to an unverified cargo-binstall download.
+        fallback: none
 
+    # Policy lives in path-commander/deny.toml.
     - name: Check dependencies for issues
-      working-directory: path-commander
-      run: |
-        # Create basic deny.toml if it doesn't exist
-        if [ ! -f deny.toml ]; then
-          cat > deny.toml << 'EOF'
-        [advisories]
-        version = 2
-        db-path = "~/.cargo/advisory-db"
-        db-urls = ["https://github.com/rustsec/advisory-db"]
-        # Only fail on actual CVEs, ignore unmaintained notices
-        ignore = [
-          "RUSTSEC-2024-0436",  # paste crate unmaintained - no security impact
-        ]
-
-        [licenses]
-        version = 2
-        allow = [
-          "MIT",
-          "Apache-2.0",
-          "Apache-2.0 WITH LLVM-exception",
-          "BSD-2-Clause",
-          "BSD-3-Clause",
-          "ISC",
-          "Unicode-DFS-2016",
-          "Zlib",
-          "MPL-2.0",
-        ]
-
-        [bans]
-        multiple-versions = "warn"
-        wildcards = "allow"
-
-        [sources]
-        unknown-registry = "deny"
-        unknown-git = "deny"
-        EOF
-        fi
-
-        cargo deny check advisories
-        cargo deny check licenses || true
-        cargo deny check bans || true
+      run: cargo deny check advisories licenses bans sources
