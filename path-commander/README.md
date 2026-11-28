@@ -41,6 +41,13 @@ A powerful Terminal User Interface (TUI) for managing Windows PATH environment v
 
 ## Installation
 
+### Download a release
+
+1. Download `path-commander-<version>-windows-x64.zip` from [GitHub Releases](https://github.com/jesse-slaton/cli-tools/releases).
+2. Extract `pc.exe` into a folder on your `PATH`.
+
+To uninstall, delete `pc.exe` and, optionally, `%USERPROFILE%\.pc\` (settings, themes, and PATH backups). See the [Code signing policy](../CODE_SIGNING_POLICY.md) for how release binaries are built and signed.
+
 ### Prerequisites
 
 - Windows OS

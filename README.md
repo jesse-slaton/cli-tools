@@ -65,6 +65,10 @@ This repository uses automated pre-commit hooks to maintain code quality:
 
 See [hooks/README.md](./hooks/README.md) for more information.
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org). See the [Code signing policy](./CODE_SIGNING_POLICY.md) for scope, team roles, and the privacy policy.
+
 ## License
 
 This project is licensed under the [MIT License](./LICENSE).

@@ -26,6 +26,9 @@ jobs:
     permissions:
       # Only this job creates the release.
       contents: write
+      # The SignPath action reads this run's job details and downloads the
+      # unsigned workflow artifact with GITHUB_TOKEN.
+      actions: read
 
     steps:
       # A manual run names its tag in an input; reject anything that is not a
@@ -86,6 +89,54 @@ jobs:
       - name: Build release binary
         working-directory: path-commander
         run: cargo build --release --locked --target x86_64-pc-windows-msvc
+
+      # --- Code signing (SignPath Foundation) --------------------------------
+      # Runs only on a tag push, and only once the SignPath repository variables
+      # exist, so releases keep working unsigned until onboarding is finished.
+      # A manual dispatch never signs: it checks out a tag while the run's own
+      # commit is the dispatching branch, so SignPath's origin verification
+      # would not match the bytes being signed.
+      - name: Upload unsigned binary for signing
+        id: upload-unsigned
+        if: github.event_name == 'push' && vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          # archive: false uploads pc.exe as-is (artifact name = file name), so
+          # the SignPath artifact configuration root is <pe-file>, not <zip-file>.
+          path: path-commander/target/x86_64-pc-windows-msvc/release/pc.exe
+          archive: false
+          retention-days: 1
+
+      - name: Submit signing request to SignPath
+        id: sign
+        if: steps.upload-unsigned.outcome == 'success'
+        uses: signpath/github-action-submit-signing-request@a2c5b60d9c75f073142b653c354b632eedce097b # v3.2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          skip-decompress: true
+          wait-for-completion: true
+          # Release signing needs a manual approval in SignPath; give the
+          # approver an hour before the job gives up.
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed
+          parameters: |
+            version: ${{ toJSON(steps.version.outputs.version_no_v) }}
+
+      - name: Verify signature and swap in signed binary
+        if: steps.sign.outcome == 'success'
+        shell: pwsh
+        run: |
+          $signed = Join-Path $PWD 'signed/pc.exe'
+          if (-not (Test-Path $signed)) { throw "SignPath returned no signed/pc.exe" }
+          $sig = Get-AuthenticodeSignature -FilePath $signed
+          if ($sig.Status -ne 'Valid') { throw "Signature status is $($sig.Status): $($sig.StatusMessage)" }
+          Write-Host "Signed by: $($sig.SignerCertificate.Subject)"
+          Write-Host "Timestamp: $($sig.TimeStamperCertificate.Subject)"
+          Copy-Item $signed 'path-commander/target/x86_64-pc-windows-msvc/release/pc.exe' -Force
 
       - name: Prepare release assets
         shell: bash
@@ -171,5 +222,8 @@ jobs:
             ### Requirements
             - Windows 10 or later
             - Administrator privileges for MACHINE path modifications
+
+            ### Code signing policy
+            See the [Code signing policy](https://github.com/${{ github.repository }}/blob/main/CODE_SIGNING_POLICY.md).
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
