@@ -4,7 +4,7 @@ A collection of command-line utilities and tools.
 
 ## Tools
 
-### [Path Commander](./path-commander/) (v0.6.3)
+### [Path Commander](./path-commander/) (v0.6.4)
 A powerful Terminal User Interface (TUI) for managing Windows PATH environment variables, inspired by Midnight Commander.
 
 **Features:**

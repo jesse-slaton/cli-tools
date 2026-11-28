@@ -5,6 +5,15 @@ All notable changes to Path Commander will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.4] - 2026-11-27
+
+### Security
+- Replaced the unmaintained `chrono` with `time`, which removes the last ignored advisory from the dependency audit (#44). Existing backups still list and restore.
+
+### Changed
+- Backups taken when Windows can't report the local time zone now fall back to UTC, and the status line says so (#44).
+- Release builds now embed version information (product name, version, original file name) in `pc.exe`, and the release workflow is ready to sign `pc.exe` through SignPath Foundation once onboarding is complete. This release is still unsigned. See the [Code signing policy](../../../CODE_SIGNING_POLICY.md) (#49, #50).
+
 ## [0.6.3] - 2026-11-27
 
 ### Fixed
