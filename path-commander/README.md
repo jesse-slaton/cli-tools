@@ -422,7 +422,7 @@ For developers:
 ## Documentation
 
 - **[USER_GUIDE.md](docs/user/USER_GUIDE.md)** - Comprehensive user guide with tutorials and examples
-- **[CHANGELOG.md](docs/development/CHANGELOG.md)** - Version history and release notes
+- **[Releases](https://github.com/jesse-slaton/cli-tools/releases)** - Version history and release notes
 - **[CONTRIBUTING.md](docs/development/CONTRIBUTING.md)** - Development setup and contribution guidelines
 - **[TESTING.md](docs/development/TESTING.md)** - Information about the test suite
 - **[MC_COMPATIBILITY.md](docs/theming/MC_COMPATIBILITY.md)** - Midnight Commander theme compatibility

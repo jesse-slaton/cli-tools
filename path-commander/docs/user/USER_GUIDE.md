@@ -645,7 +645,7 @@ Access all features through menus if you forget shortcuts:
 - Press **F1** or **?** for in-app help
 - Visit: https://github.com/jesse-slaton/cli-tools
 - Report issues: https://github.com/jesse-slaton/cli-tools/issues
-- Read docs: [README.md](../../README.md), [CHANGELOG.md](../development/CHANGELOG.md)
+- Read docs: [README.md](../../README.md), [release notes](https://github.com/jesse-slaton/cli-tools/releases)
 
 ---
 
