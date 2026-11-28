@@ -119,6 +119,22 @@ jobs:
       # A manual dispatch never signs: it checks out a tag while the run's own
       # commit is the dispatching branch, so SignPath's origin verification
       # would not match the bytes being signed.
+      # Signing must never switch off silently. Until onboarding is finished a
+      # tag push without SignPath configured only warns; once it is, the
+      # maintainer sets the repository variable SIGNING_REQUIRED=true so a
+      # missing or mis-scoped SIGNPATH_ORGANIZATION_ID fails the release.
+      - name: Check signing configuration
+        if: github.event_name == 'push' && vars.SIGNPATH_ORGANIZATION_ID == ''
+        shell: pwsh
+        env:
+          SIGNING_REQUIRED: ${{ vars.SIGNING_REQUIRED }}
+        run: |
+          if ($env:SIGNING_REQUIRED -eq 'true') {
+            Write-Host "::error::SIGNING_REQUIRED is true but the SIGNPATH_ORGANIZATION_ID repository variable is empty or unset; refusing to publish an unsigned release."
+            exit 1
+          }
+          Write-Host "::warning::This release is NOT signed (SignPath is not configured)"
+
       - name: Upload unsigned binary for signing
         id: upload-unsigned
         if: github.event_name == 'push' && vars.SIGNPATH_ORGANIZATION_ID != ''
